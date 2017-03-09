@@ -1,0 +1,13 @@
+api_auth:
+    route: /api/auth
+    module: api
+    action: auth
+    parameters: [ ]
+    csrf_enabled: false
+
+api_test:
+    route: /api/test
+    module: api
+    action: test
+    parameters: [ ]
+    csrf_enabled: false
