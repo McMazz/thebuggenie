@@ -1,13 +1,20 @@
-api_auth:
+api_health_check:
+    route: /api/health
+    module: api
+    action: health
+    parameters: [ ]
+    csrf_enabled: false
+
+api_authentication:
     route: /api/auth
     module: api
     action: auth
     parameters: [ ]
     csrf_enabled: false
 
-api_test:
-    route: /api/test
+api_user_details:
+    route: /api/auth/me
     module: api
-    action: test
+    action: me
     parameters: [ ]
     csrf_enabled: false

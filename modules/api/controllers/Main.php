@@ -2,28 +2,43 @@
 
 namespace thebuggenie\modules\api\controllers;
 
-use thebuggenie\core\framework;
 use thebuggenie\core\entities;
 use thebuggenie\core\entities\tables;
+use thebuggenie\core\framework\Request;
+use thebuggenie\core\framework\Settings;
+use thebuggenie\core\framework\Response;
 
-class Main extends framework\Action
+class Main extends Action
 {
 	public function getAuthenticationMethodForAction($action)
 	{
 		switch ($action)
 		{
+			case 'health':
 			case 'auth':
-				return framework\Action::AUTHENTICATION_METHOD_DUMMY;
+				return self::AUTHENTICATION_METHOD_DUMMY;
 				break;
 			default:
-				return framework\Action::AUTHENTICATION_METHOD_APPLICATION_PASSWORD;
+				return self::AUTHENTICATION_METHOD_APPLICATION_PASSWORD;
 				break;
 		}
 	}
 
-	public function runAuth(framework\Request $request)
+	public function runHealth(Request $request)
 	{
-		framework\Logging::log('Authenticating new application password.', 'api', framework\Logging::LEVEL_INFO);
+		if(Settings::isMaintenanceModeEnabled())
+		{
+			return $this->json([
+					'status' => 'MAINTENANCE',
+					'message' => Settings::getMaintenanceMessage() ?: 'Maintenance mode enabled'
+			], 500);
+		}
+		return $this->json(['status' => 'OK']);
+	}
+
+	public function runAuth(Request $request)
+	{
+		$this->info('Authenticating new application password.');
 		$username = trim($request['username']);
 		$password = trim($request['password']);
 		if ($username)
@@ -44,19 +59,22 @@ class Main extends framework\Action
 						{
 							$app_password->useOnce();
 							$app_password->save();
-							return $this->renderJSON([ 'api_username' => $username, 'api_token' => $token ]);
+							return $this->json([
+									'api_username' => $username,
+									'api_token' => $token
+							]);
 						}
 					}
 				}
 			}
-			framework\Logging::log('No password matched.', 'api', framework\Logging::LEVEL_INFO);
+			$this->warn('No password matched.');
 		}
-		$this->getResponse()->setHttpStatus(400);
-		return $this->renderJSON([ 'error' => 'Incorrect username or application password' ]);
+		return $this->json(['error' => 'Incorrect username or application password'], Response::HTTP_STATUS_BAD_REQUEST);
 	}
 
-	public function runTest(framework\Request $request)
+	public function runMe(Request $request)
 	{
-		return $this->renderJSON([ 'message' => 'This is a test' ]);
+		$user = $this->getUser()->toJSON();
+		return $this->json($user);
 	}
 }

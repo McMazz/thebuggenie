@@ -24,32 +24,20 @@ use thebuggenie\core\framework;
 class Api extends \thebuggenie\core\entities\Module
 {
 	const VERSION = '0.2';
-	
+
 	protected $_name = 'api';
 	protected $_longname = 'External API module';
 	protected $_description = 'Enables integration with third party tools and plugins';
 	protected $_module_config_title = 'API';
 	protected $_module_config_description = 'Set up the API module from this section';
-	protected $_has_account_settings = false;
-	
+
 	public static function getModule()
 	{
 		return framework\Context::getModule('api');
 	}
+
 	protected function _initialize()
 	{
+		//
 	}
-	protected function _addListeners()
-	{
-	}
-	protected function _install($scope)
-	{
-	}
-	protected function _loadFixtures($scope)
-	{
-	}
-	protected function _uninstall()
-	{
-	}
-	
 }
