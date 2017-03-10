@@ -18,3 +18,10 @@ api_user_details:
     action: me
     parameters: [ ]
     csrf_enabled: false
+
+api_list_user_projects:
+    route: /api/projects
+    module: api
+    action: listProjects
+    parameters: [ ]
+    csrf_enabled: false

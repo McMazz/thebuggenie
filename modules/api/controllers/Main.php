@@ -5,8 +5,8 @@ namespace thebuggenie\modules\api\controllers;
 use thebuggenie\core\entities;
 use thebuggenie\core\entities\tables;
 use thebuggenie\core\framework\Request;
-use thebuggenie\core\framework\Settings;
 use thebuggenie\core\framework\Response;
+use thebuggenie\core\framework\Settings;
 
 class Main extends Action
 {
@@ -76,5 +76,16 @@ class Main extends Action
 	{
 		$user = $this->getUser()->toJSON();
 		return $this->json($user);
+	}
+
+	public function runListProjects(Request $request)
+	{
+		$projects = [];
+		foreach ($this->getUser()->getAssociatedProjects() as $project)
+		{
+			if ($project->isDeleted()) continue;
+			$projects[] = $project->toJSON(false);
+		}
+		return $this->json($projects);
 	}
 }
