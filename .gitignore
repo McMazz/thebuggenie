@@ -2,7 +2,6 @@ core/config/b2db.yml
 cache
 files/
 .settings/
-thebuggenie/.htaccess
 installed
 nbproject
 thebuggenie.log
@@ -24,3 +23,5 @@ modules/*/vendor
 vendor/
 /composer.phar
 .directory
+public/.htaccess
+public/images.lnk*
