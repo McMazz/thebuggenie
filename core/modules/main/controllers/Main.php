@@ -13,6 +13,10 @@ use thebuggenie\core\framework,
  */
 class Main extends framework\Action
 {
+	public function getAuthenticationMethodForAction($action)
+	{
+		return self::AUTHENTICATION_METHOD_CORE;
+	}
 
     /**
      * The currently selected project in actions where there is one
@@ -36,6 +40,8 @@ class Main extends framework\Action
 
         }
     }
+    
+    
 
     protected function _getIssueFromRequest(framework\Request $request)
     {
