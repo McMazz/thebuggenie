@@ -3,6 +3,7 @@
 namespace thebuggenie\modules\api\controllers;
 
 use thebuggenie\core\entities;
+use thebuggenie\core\entities\tables;
 use thebuggenie\core\entities\Issue;
 use thebuggenie\core\entities\Issuetype;
 use thebuggenie\core\entities\Project;
@@ -127,6 +128,23 @@ class Main extends Action
 			$projects[] = $project->toJSON(false);
 		}
 		return $this->json($projects);
+	}
+	
+	public function runListOffices(Request $request)
+	{
+		$offices = [];
+		
+		$project_id = trim($request['project_id']);
+		$componentsTable = tables\Components::getTable();
+		$crit = $componentsTable->getCriteria();
+		$crit->addWhere(tables\Components::PROJECT, $project_id);
+		$components = $componentsTable->select($crit, false);
+		
+		foreach ($components as $component){
+			$offices[] = $component->toJSON(false);
+		}
+		
+		return $this->json($offices);
 	}
 
 	public function runToggleFavouriteIssue(Request $request)

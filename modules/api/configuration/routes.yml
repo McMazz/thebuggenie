@@ -26,6 +26,13 @@ api_list_user_projects:
     parameters: [ ]
     csrf_enabled: false
 
+api_project_offices:
+    route: /api/projects/:project_id/offices
+    module: api
+    action: listOffices
+    parameters: [ ]
+    csrf_enabled: false
+
 api_list_user_issues:
     route: /api/issues
     module: api
