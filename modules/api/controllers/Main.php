@@ -183,10 +183,9 @@ class Main extends Action
 
 		$project_id = trim($request['project_id']);
 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-		$tableProject = entities\Project::getB2DBTable()->getCriteria(false);
-		foreach ($columnissuetype as $column)
-		{
-			$issuetypes[] = $column->toJSON(false);
+		
+		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issueType){
+			$issuetypes[] = $issueType->toJSON(false);
 		}
 	
 		return $this->json($issuetypes);
