@@ -3,10 +3,13 @@
 namespace thebuggenie\modules\api\controllers;
 
 use thebuggenie\core\entities;
+use thebuggenie\core\entities\Issue;
 use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
+use thebuggenie\core\entities\Project;
+use thebuggenie\core\entities\Issuetype;
 
 class Main extends Action
 {
@@ -124,5 +127,68 @@ class Main extends Action
 			$projects[] = $project->toJSON(false);
 		}
 		return $this->json($projects);
+	}
+	
+	public function runListRecentIssues(Request $request)
+	{
+		$recentIssues = [];
+		$issuetype_ids = entities\Issuetype::getAll();
+	
+		foreach ($this->getUser()->getAssociatedProjects() as $project)
+		{
+			foreach ($issuetype_ids as $issuetype_id){
+				foreach($project->getRecentIssues($issuetype_id) as $issue)
+				{
+					$recentIssues[] = $issue->toJSON(false);
+				}
+			}
+		}
+		
+		return $this->json($recentIssues);
+	}
+	
+	public function runListAssignedIssues(Request $request)
+	{
+		$assignedIssues = [];
+		$user = $this->getUser();
+		
+		foreach ($user->getUserAssignedIssues() as $issue)
+		{
+			$assignedIssues[] = $issue->toJSON(false);
+		}
+		
+		return $this->json($assignedIssues);
+	}
+	
+	public function runListStarredIssues(Request $request)
+	{
+		$starredissues = [];
+		
+		$idstarredissues = entities\tables\UserIssues::getTable()->getUserStarredIssues($this->getUser()->getID());
+		
+		foreach ($idstarredissues as $idIssue)
+		{
+			$starredissues[] = entities\tables\Issues::getTable()->getIssueByID($idIssue)->toJSON(false);
+		}
+		
+		return $this->json($starredissues);
+	}
+	
+	/*
+	 * @param project_id
+	 */
+	public function runListIssueTypes(Request $request)
+	{
+		$issuetypes = [];
+
+		$project_id = trim($request['project_id']);
+		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+		$tableProject = entities\Project::getB2DBTable()->getCriteria(false);
+		foreach ($columnissuetype as $column)
+		{
+			$issuetypes[] = $column->toJSON(false);
+		}
+	
+		return $this->json($issuetypes);
 	}
 }

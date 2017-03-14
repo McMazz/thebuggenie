@@ -13,7 +13,7 @@ api_authentication:
     csrf_enabled: false
 
 api_user_details:
-    route: /api/auth/me
+    route: /api/me
     module: api
     action: me
     parameters: [ ]
@@ -23,5 +23,33 @@ api_list_user_projects:
     route: /api/projects
     module: api
     action: listProjects
+    parameters: [ ]
+    csrf_enabled: false
+    
+api_list_recent_issues:
+    route: /api/recentissues
+    module: api
+    action: listRecentIssues
+    parameters: [ ]
+    csrf_enabled: false
+    
+api_list_assigned_issues:
+    route: /api/assignedissues
+    module: api
+    action: listAssignedIssues
+    parameters: [ ]
+    csrf_enabled: false
+    
+api_list_issues_type_by_project:
+    route: /api/issuetypes
+    module: api
+    action: listIssueTypes
+    parameters: [ ]
+    csrf_enabled: false
+    
+api_list_starred_issues:
+    route: /api/starredissues
+    module: api
+    action: listStarredIssues
     parameters: [ ]
     csrf_enabled: false
