@@ -25,6 +25,13 @@ api_list_user_projects:
     action: listProjects
     parameters: [ ]
     csrf_enabled: false
+
+api_list_user_issues:
+    route: /api/issues
+    module: api
+    action: listIssues
+    parameters: [ ]
+    csrf_enabled: false
     
 api_list_recent_issues:
     route: /api/issues/recent

@@ -4,12 +4,12 @@ namespace thebuggenie\modules\api\controllers;
 
 use thebuggenie\core\entities;
 use thebuggenie\core\entities\Issue;
+use thebuggenie\core\entities\Issuetype;
+use thebuggenie\core\entities\Project;
 use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
-use thebuggenie\core\entities\Project;
-use thebuggenie\core\entities\Issuetype;
 
 class Main extends Action
 {
@@ -159,6 +159,30 @@ class Main extends Action
 				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
 				'count' => count($issue->getSubscribers())
 		]);
+	}
+	
+	public function runListIssues(Request $request)
+	{
+		$text = trim($request['search']);
+		$limit = intval($request['paginate']);
+		$offset = intval($request['page']);
+		if($limit == 0)
+		{
+			$limit = 10;
+		}
+		if($offset != 0)
+		{
+			$offset -= 1;
+			$offset *= $limit;
+		}
+		$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
+		$issues = entities\Issue::findIssues($filters, $limit, $offset);
+		$retIssues = [];
+		foreach ($issues[0] as $issue)
+		{
+			$retIssues[] = $issue->toJSON(false);
+		}
+		return $this->json($retIssues);
 	}
 
 	public function runListRecentIssues(Request $request)
