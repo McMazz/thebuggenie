@@ -25,6 +25,13 @@ api_list_user_projects:
     action: listProjects
     parameters: [ ]
     csrf_enabled: false
+    
+api_list_clients:
+    route: /api/projects/:project_id/clients
+    module: api
+    action: listClients
+    parameters: [ ]
+    csrf_enabled: false
 
 api_project_offices:
     route: /api/projects/:project_id/offices

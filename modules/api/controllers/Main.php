@@ -263,4 +263,21 @@ class Main extends Action
 	
 		return $this->json($issuetypes);
 	}
+	
+	public function runListClients(Request $request)
+	{
+		$clients = [];
+	
+		$project_id = trim($request['project_id']);
+		$editionsTable = tables\Editions::getTable();
+		$crit = $editionsTable->getCriteria();
+		$crit->addWhere(tables\Editions::PROJECT, $project_id);
+		$editions = $editionsTable->select($crit, false);
+	
+		foreach ($editions as $edition){
+			$clients[] = $edition->toJSON(true);
+		}
+	
+		return $this->json($clients);
+	}
 }
