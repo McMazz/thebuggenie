@@ -125,4 +125,36 @@ class Main extends Action
 		}
 		return $this->json($projects);
 	}
+	
+	public function runToggleFavouriteIssue(Request $request)
+	{
+		if ($issue_id = trim($request['issue_id']))
+		{
+			try
+			{
+				$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+			}
+			catch (\Exception $e)
+			{
+				return $this->json(['error' => 'Errore nello svolgimento della richiesta.'], 500);
+			}
+		}
+		else
+		{
+			return $this->json(['error' => 'No issue found with id "'.$issue_id.'"'], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$user = $this->getUser();
+		if ($user->isIssueStarred($issue_id))
+		{
+			$retval = !$user->removeStarredIssue($issue_id);
+		}
+		else
+		{
+			$retval = $user->addStarredIssue($issue_id);
+		}
+		return $this->json([
+				'starred' => $retval,
+				'count' => count($issue->getSubscribers())
+		]);
+	}
 }

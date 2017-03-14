@@ -25,3 +25,10 @@ api_list_user_projects:
     action: listProjects
     parameters: [ ]
     csrf_enabled: false
+
+api_toggle_favourite_issue:
+    route: /api/issues/:issue_id/toggle_favourite
+    module: api
+    action: toggleFavouriteIssue
+    parameters: [ ]
+    csrf_enabled: false
