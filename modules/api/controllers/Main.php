@@ -156,7 +156,7 @@ class Main extends Action
 			$retval = $user->addStarredIssue($issue_id);
 		}
 		return $this->json([
-				'starred' => $retval,
+				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
 				'count' => count($issue->getSubscribers())
 		]);
 	}
@@ -195,12 +195,11 @@ class Main extends Action
 	public function runListStarredIssues(Request $request)
 	{
 		$starredissues = [];
-		
-		$idstarredissues = entities\tables\UserIssues::getTable()->getUserStarredIssues($this->getUser()->getID());
-		
-		foreach ($idstarredissues as $idIssue)
+		$user = $this->getUser();
+
+		foreach ($user->getStarredIssues() as $starredIssue)
 		{
-			$starredissues[] = entities\tables\Issues::getTable()->getIssueByID($idIssue)->toJSON(false);
+			$starredissues[] = $starredIssue->toJSON(false);
 		}
 		
 		return $this->json($starredissues);
