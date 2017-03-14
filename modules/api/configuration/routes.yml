@@ -26,17 +26,17 @@ api_list_user_projects:
     parameters: [ ]
     csrf_enabled: false
     
-api_list_clients:
-    route: /api/projects/:project_id/clients
+api_list_editions:
+    route: /api/projects/:project_id/editions
     module: api
-    action: listClients
+    action: listEditions
     parameters: [ ]
     csrf_enabled: false
 
-api_project_offices:
-    route: /api/projects/:project_id/offices
+api_project_components:
+    route: /api/projects/:project_id/components
     module: api
-    action: listOffices
+    action: listComponents
     parameters: [ ]
     csrf_enabled: false
 
@@ -76,7 +76,7 @@ api_list_starred_issues:
     csrf_enabled: false
 
 api_toggle_favourite_issue:
-    route: /api/issues/:issue_id/toggle_favourite
+    route: /api/issues/:issue_id/toggle-favourite
     module: api
     action: toggleFavouriteIssue
     parameters: [ ]

@@ -40,58 +40,6 @@ class Main extends Action
 		return $this->json(['status' => 'OK']);
 	}
 
-	/**
-	 * 
-	 * @param string $username
-	 * @param string $password
-	 * @return entities\User|false
-	 */
-	protected function authenticateUser($username, $password)
-	{
-		$mod = Context::getModule(Settings::getAuthenticationBackend());
-		$user = $mod->doLogin($username, $password);
-		if (!$user->isActivated())
-		{
-			return false;
-		}
-		elseif (!$user->isEnabled())
-		{
-			return false;
-		}
-		elseif(!$user->isConfirmedMemberOfScope(Context::getScope()))
-		{
-			if (!framework\Settings::isRegistrationAllowed())
-			{
-				return false;
-			}
-		}
-		return $user;
-	}
-
-	/**
-	 * 
-	 * @param entities\User $user
-	 * @param string $token_name
-	 * @return string|false
-	 */
-	protected function createApplicationPassword($user, $token_name)
-	{
-		foreach($user->getApplicationPasswords() as $app_password)
-		{
-			if($app_password->getName() === $token_name)
-			{
-				return false;
-			}
-		}
-		$password = new entities\ApplicationPassword();
-		$password->setUser($user);
-		$password->setName($token_name);
-		$visible_password = strtolower(entities\User::createPassword());
-		$password->setPassword($visible_password);
-		$password->save();
-		return entities\ApplicationPassword::createToken($visible_password);
-	}
-
 	public function runAuth(Request $request)
 	{
 		if(!isset($request['username'], $request['password'], $request['token_name'])) {
@@ -130,53 +78,36 @@ class Main extends Action
 		return $this->json($projects);
 	}
 	
-	public function runListOffices(Request $request)
+	public function runListEditions(Request $request)
 	{
-		$offices = [];
+		$editions = [];
+	
+		$project_id = trim($request['project_id']);
+		$editionsTable = tables\Editions::getTable();
+		$crit = $editionsTable->getCriteria();
+		$crit->addWhere(tables\Editions::PROJECT, $project_id);
+	
+		foreach ($editionsTable->select($crit) as $edition){
+			$editions[] = $edition->toJSON(true);
+		}
+	
+		return $this->json($editions);
+	}
+	
+	public function runListComponents(Request $request)
+	{
+		$components = [];
 		
 		$project_id = trim($request['project_id']);
 		$componentsTable = tables\Components::getTable();
 		$crit = $componentsTable->getCriteria();
 		$crit->addWhere(tables\Components::PROJECT, $project_id);
-		$components = $componentsTable->select($crit, false);
 		
-		foreach ($components as $component){
-			$offices[] = $component->toJSON(false);
+		foreach ($componentsTable->select($crit, false) as $component){
+			$component[] = $component->toJSON(false);
 		}
 		
-		return $this->json($offices);
-	}
-
-	public function runToggleFavouriteIssue(Request $request)
-	{
-		if ($issue_id = trim($request['issue_id']))
-		{
-			try
-			{
-				$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
-			}
-			catch (\Exception $e)
-			{
-				return $this->json(['error' => 'Errore nello svolgimento della richiesta.'], 500);
-			}
-		}
-		else
-		{
-			return $this->json(['error' => 'No issue found with id "'.$issue_id.'"'], Response::HTTP_STATUS_BAD_REQUEST);
-		}
-		$user = $this->getUser();
-		if ($user->isIssueStarred($issue_id))
-		{
-			$retval = !$user->removeStarredIssue($issue_id);
-		}
-		else
-		{
-			$retval = $user->addStarredIssue($issue_id);
-		}
-		return $this->json([
-				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
-				'count' => count($issue->getSubscribers())
-		]);
+		return $this->json($components);
 	}
 	
 	public function runListIssues(Request $request)
@@ -233,6 +164,20 @@ class Main extends Action
 		
 		return $this->json($assignedIssues);
 	}
+	
+	public function runListIssueTypes(Request $request)
+	{
+		$issuetypes = [];
+	
+		$project_id = trim($request['project_id']);
+		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+	
+		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issueType){
+			$issuetypes[] = $issueType->toJSON(false);
+		}
+	
+		return $this->json($issuetypes);
+	}
 
 	public function runListStarredIssues(Request $request)
 	{
@@ -246,38 +191,88 @@ class Main extends Action
 		
 		return $this->json($starredissues);
 	}
-
-	/*
-	 * @param project_id
-	 */
-	public function runListIssueTypes(Request $request)
-	{
-		$issuetypes = [];
-
-		$project_id = trim($request['project_id']);
-		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-		
-		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issueType){
-			$issuetypes[] = $issueType->toJSON(false);
-		}
 	
-		return $this->json($issuetypes);
+	public function runToggleFavouriteIssue(Request $request)
+	{
+		if ($issue_id = trim($request['issue_id']))
+		{
+			try
+			{
+				$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+			}
+			catch (\Exception $e)
+			{
+				return $this->json(['error' => 'Errore nello svolgimento della richiesta.'], 500);
+			}
+		}
+		else
+		{
+			return $this->json(['error' => 'No issue found with id "'.$issue_id.'"'], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$user = $this->getUser();
+		if ($user->isIssueStarred($issue_id))
+		{
+			$retval = !$user->removeStarredIssue($issue_id);
+		}
+		else
+		{
+			$retval = $user->addStarredIssue($issue_id);
+		}
+		return $this->json([
+				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
+				'count' => count($issue->getSubscribers())
+		]);
 	}
 	
-	public function runListClients(Request $request)
+	/**
+	 *
+	 * @param string $username
+	 * @param string $password
+	 * @return entities\User|false
+	 */
+	protected function authenticateUser($username, $password)
 	{
-		$clients = [];
-	
-		$project_id = trim($request['project_id']);
-		$editionsTable = tables\Editions::getTable();
-		$crit = $editionsTable->getCriteria();
-		$crit->addWhere(tables\Editions::PROJECT, $project_id);
-		$editions = $editionsTable->select($crit, false);
-	
-		foreach ($editions as $edition){
-			$clients[] = $edition->toJSON(true);
+		$mod = Context::getModule(Settings::getAuthenticationBackend());
+		$user = $mod->doLogin($username, $password);
+		if (!$user->isActivated())
+		{
+			return false;
 		}
+		elseif (!$user->isEnabled())
+		{
+			return false;
+		}
+		elseif(!$user->isConfirmedMemberOfScope(Context::getScope()))
+		{
+			if (!framework\Settings::isRegistrationAllowed())
+			{
+				return false;
+			}
+		}
+		return $user;
+	}
 	
-		return $this->json($clients);
+	/**
+	 *
+	 * @param entities\User $user
+	 * @param string $token_name
+	 * @return string|false
+	 */
+	protected function createApplicationPassword($user, $token_name)
+	{
+		foreach($user->getApplicationPasswords() as $app_password)
+		{
+			if($app_password->getName() === $token_name)
+			{
+				return false;
+			}
+		}
+		$password = new entities\ApplicationPassword();
+		$password->setUser($user);
+		$password->setName($token_name);
+		$visible_password = strtolower(entities\User::createPassword());
+		$password->setPassword($visible_password);
+		$password->save();
+		return entities\ApplicationPassword::createToken($visible_password);
 	}
 }
