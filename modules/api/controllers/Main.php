@@ -4,12 +4,12 @@ namespace thebuggenie\modules\api\controllers;
 
 use thebuggenie\core\entities;
 use thebuggenie\core\entities\Issue;
+use thebuggenie\core\entities\Issuetype;
+use thebuggenie\core\entities\Project;
 use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
-use thebuggenie\core\entities\Project;
-use thebuggenie\core\entities\Issuetype;
 
 class Main extends Action
 {
@@ -128,7 +128,63 @@ class Main extends Action
 		}
 		return $this->json($projects);
 	}
+
+	public function runToggleFavouriteIssue(Request $request)
+	{
+		if ($issue_id = trim($request['issue_id']))
+		{
+			try
+			{
+				$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+			}
+			catch (\Exception $e)
+			{
+				return $this->json(['error' => 'Errore nello svolgimento della richiesta.'], 500);
+			}
+		}
+		else
+		{
+			return $this->json(['error' => 'No issue found with id "'.$issue_id.'"'], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$user = $this->getUser();
+		if ($user->isIssueStarred($issue_id))
+		{
+			$retval = !$user->removeStarredIssue($issue_id);
+		}
+		else
+		{
+			$retval = $user->addStarredIssue($issue_id);
+		}
+		return $this->json([
+				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
+				'count' => count($issue->getSubscribers())
+		]);
+	}
 	
+	public function runListIssues(Request $request)
+	{
+		$text = trim($request['search']);
+		$limit = intval($request['paginate']);
+		$offset = intval($request['page']);
+		if($limit == 0)
+		{
+			$limit = 10;
+		}
+		if($offset != 0)
+		{
+			$offset -= 1;
+			$offset *= $limit;
+		}
+		$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
+		$issues = entities\Issue::findIssues($filters, $limit, $offset);
+		$retIssues = [];
+		foreach ($issues[0] as $issue)
+		{
+			$retIssues[] = $issue->toJSON(false);
+		}
+		return $this->json($retIssues);
+	}
+
 	public function runListRecentIssues(Request $request)
 	{
 		$recentIssues = [];
@@ -146,7 +202,7 @@ class Main extends Action
 		
 		return $this->json($recentIssues);
 	}
-	
+
 	public function runListAssignedIssues(Request $request)
 	{
 		$assignedIssues = [];
@@ -159,21 +215,20 @@ class Main extends Action
 		
 		return $this->json($assignedIssues);
 	}
-	
+
 	public function runListStarredIssues(Request $request)
 	{
 		$starredissues = [];
-		
-		$idstarredissues = entities\tables\UserIssues::getTable()->getUserStarredIssues($this->getUser()->getID());
-		
-		foreach ($idstarredissues as $idIssue)
+		$user = $this->getUser();
+
+		foreach ($user->getStarredIssues() as $starredIssue)
 		{
-			$starredissues[] = entities\tables\Issues::getTable()->getIssueByID($idIssue)->toJSON(false);
+			$starredissues[] = $starredIssue->toJSON(false);
 		}
 		
 		return $this->json($starredissues);
 	}
-	
+
 	/*
 	 * @param project_id
 	 */
