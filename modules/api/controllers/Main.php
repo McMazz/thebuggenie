@@ -3,7 +3,7 @@
 namespace thebuggenie\modules\api\controllers;
 
 use thebuggenie\core\entities;
-use thebuggenie\core\entities\tables;
+use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
@@ -36,40 +36,77 @@ class Main extends Action
 		return $this->json(['status' => 'OK']);
 	}
 
+	/**
+	 * 
+	 * @param string $username
+	 * @param string $password
+	 * @return entities\User|false
+	 */
+	protected function authenticateUser($username, $password)
+	{
+		$mod = Context::getModule(Settings::getAuthenticationBackend());
+		$user = $mod->doLogin($username, $password);
+		if (!$user->isActivated())
+		{
+			return false;
+		}
+		elseif (!$user->isEnabled())
+		{
+			return false;
+		}
+		elseif(!$user->isConfirmedMemberOfScope(Context::getScope()))
+		{
+			if (!framework\Settings::isRegistrationAllowed())
+			{
+				return false;
+			}
+		}
+		return $user;
+	}
+
+	/**
+	 * 
+	 * @param entities\User $user
+	 * @param string $token_name
+	 * @return string|false
+	 */
+	protected function createApplicationPassword($user, $token_name)
+	{
+		foreach($user->getApplicationPasswords() as $app_password)
+		{
+			if($app_password->getName() === $token_name)
+			{
+				return false;
+			}
+		}
+		$password = new entities\ApplicationPassword();
+		$password->setUser($user);
+		$password->setName($token_name);
+		$visible_password = strtolower(entities\User::createPassword());
+		$password->setPassword($visible_password);
+		$password->save();
+		return entities\ApplicationPassword::createToken($visible_password);
+	}
+
 	public function runAuth(Request $request)
 	{
-		$this->info('Authenticating new application password.');
+		if(!isset($request['username'], $request['password'], $request['token_name'])) {
+			return $this->json(['error' => 'Username, password, and token name are required.'], Response::HTTP_STATUS_BAD_REQUEST);
+		}
 		$username = trim($request['username']);
 		$password = trim($request['password']);
-		if ($username)
+		$user = $this->authenticateUser($username, $password);
+		if($user === false)
 		{
-			$user = tables\Users::getTable()->getByUsername($username);
-			if ($password && $user instanceof entities\User)
-			{
-				// Generate token from the application password
-				$token = entities\ApplicationPassword::createToken($password);
-				// Crypt, for comparison with db value
-				$hashed_token = entities\User::hashPassword($token, $user->getSalt());
-				foreach ($user->getApplicationPasswords() as $app_password)
-				{
-					// Only return the token for new application passwords!
-					if (!$app_password->isUsed())
-					{
-						if ($app_password->getHashPassword() == $hashed_token)
-						{
-							$app_password->useOnce();
-							$app_password->save();
-							return $this->json([
-									'api_username' => $username,
-									'api_token' => $token
-							]);
-						}
-					}
-				}
-			}
-			$this->warn('No password matched.');
+			return $this->json(['error' => 'Authentication forbidden.'], Response::HTTP_STATUS_FORBIDDEN);
 		}
-		return $this->json(['error' => 'Incorrect username or application password'], Response::HTTP_STATUS_BAD_REQUEST);
+		$token_name = trim($request['token_name']);
+		$token = $this->createApplicationPassword($user, $token_name);
+		if($token === false)
+		{
+			return $this->json(['error' => 'Token name already in use.'], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		return $this->json(['token' => $token]);
 	}
 
 	public function runMe(Request $request)
