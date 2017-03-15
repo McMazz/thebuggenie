@@ -18,6 +18,13 @@ api_user_details:
     action: me
     parameters: [ ]
     csrf_enabled: false
+    
+api_user_teams:
+    route: /api/me/teams
+    module: api
+    action: listTeams
+    parameters: [ ]
+    csrf_enabled: false
 
 api_list_user_projects:
     route: /api/projects
@@ -50,7 +57,7 @@ api_list_user_issues:
 api_list_recent_issues:
     route: /api/issues/recent
     module: api
-    action: listRecentIssues
+    action: listUserRecentIssues
     parameters: [ ]
     csrf_enabled: false
     

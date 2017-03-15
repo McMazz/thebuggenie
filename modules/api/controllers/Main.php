@@ -11,6 +11,7 @@ use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
+use b2db\Criteria;
 
 class Main extends Action
 {
@@ -66,6 +67,15 @@ class Main extends Action
 		$user = $this->getUser()->toJSON();
 		return $this->json($user);
 	}
+	
+	public function runListTeams(Request $request)
+	{
+		$teams = [];		
+		foreach ($this->getUser()->getTeams() as $team){
+			$teams[] = $team->toJSON(false);
+		}
+		return $this->json($teams);
+	}
 
 	public function runListProjects(Request $request)
 	{
@@ -81,16 +91,13 @@ class Main extends Action
 	public function runListEditions(Request $request)
 	{
 		$editions = [];
-	
 		$project_id = trim($request['project_id']);
-		$editionsTable = tables\Editions::getTable();
-		$crit = $editionsTable->getCriteria();
+		$editionstable = tables\Editions::getTable();
+		$crit = $editionstable->getCriteria();
 		$crit->addWhere(tables\Editions::PROJECT, $project_id);
-	
-		foreach ($editionsTable->select($crit) as $edition){
+		foreach ($editionstable->select($crit) as $edition){
 			$editions[] = $edition->toJSON(true);
 		}
-	
 		return $this->json($editions);
 	}
 	
@@ -133,23 +140,39 @@ class Main extends Action
 		}
 		return $this->json($retIssues);
 	}
-
-	public function runListRecentIssues(Request $request)
-	{
-		$recentIssues = [];
-		$issuetype_ids = entities\Issuetype::getAll();
 	
-		foreach ($this->getUser()->getAssociatedProjects() as $project)
+	public function runListUserRecentIssues(Request $request)
+	{
+		$recentIssuesJSON = [];
+		$parsedIssues = [];
+		$user_teams = $this->getUser()->getTeams();
+		$user_id = $this->getUser()->getID();
+		$limit = intval($request['limit']);
+		if($limit == 0)
 		{
-			foreach ($issuetype_ids as $issuetype_id){
-				foreach($project->getRecentIssues($issuetype_id) as $issue)
+			$limit = 10;
+		}
+		$issuestable = tables\Issues::getTable();
+		foreach ($user_teams as $team)
+		{
+			$crit = $issuestable->getCriteria();
+			$crit->addWhere(tables\Issues::DELETED, false);
+			$crit->addWhere(tables\Issues::POSTED_BY, $user_id);
+			$crit->addOr(tables\Issues::BEING_WORKED_ON_BY_USER, $user_id);
+			$crit->addOr(tables\Issues::ASSIGNEE_USER, $user_id);
+			$crit->addWhere(tables\Issues::ASSIGNEE_TEAM, $team);
+			$crit->addOr(tables\Issues::OWNER_USER, $user_id);
+			$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
+			$crit->setLimit($limit);
+			foreach ($issuestable->select($crit) as $issue){
+				if(!in_array($issue->getID(), $parsedIssues))
 				{
-					$recentIssues[] = $issue->toJSON(false);
+					$recentIssuesJSON[]	= $issue->toJSON(false);
+					$parsedIssues[] = $issue->getID();
 				}
 			}
 		}
-		
-		return $this->json($recentIssues);
+		return $this->json($recentIssuesJSON);
 	}
 
 	public function runListAssignedIssues(Request $request)
