@@ -92,10 +92,10 @@ class Main extends Action
 	{
 		$editions = [];
 		$project_id = trim($request['project_id']);
-		$editionstable = tables\Editions::getTable();
-		$crit = $editionstable->getCriteria();
+		$editions_table = tables\Editions::getTable();
+		$crit = $editions_table->getCriteria();
 		$crit->addWhere(tables\Editions::PROJECT, $project_id);
-		foreach ($editionstable->select($crit) as $edition){
+		foreach ($editions_table->select($crit) as $edition){
 			$editions[] = $edition->toJSON(true);
 		}
 		return $this->json($editions);
@@ -104,16 +104,13 @@ class Main extends Action
 	public function runListComponents(Request $request)
 	{
 		$components = [];
-		
 		$project_id = trim($request['project_id']);
-		$componentsTable = tables\Components::getTable();
-		$crit = $componentsTable->getCriteria();
+		$components_table = tables\Components::getTable();
+		$crit = $components_table->getCriteria();
 		$crit->addWhere(tables\Components::PROJECT, $project_id);
-		
-		foreach ($componentsTable->select($crit, false) as $component){
-			$component[] = $component->toJSON(false);
+		foreach ($components_table->select($crit, false) as $component){
+			$components[] = $component->toJSON(false);
 		}
-		
 		return $this->json($components);
 	}
 	
@@ -133,18 +130,18 @@ class Main extends Action
 		}
 		$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
 		$issues = entities\Issue::findIssues($filters, $limit, $offset);
-		$retIssues = [];
+		$ret_issues = [];
 		foreach ($issues[0] as $issue)
 		{
-			$retIssues[] = $issue->toJSON(false);
+			$ret_issues[] = $issue->toJSON(false);
 		}
-		return $this->json($retIssues);
+		return $this->json($ret_issues);
 	}
 	
 	public function runListUserRecentIssues(Request $request)
 	{
-		$recentIssuesJSON = [];
-		$parsedIssues = [];
+		$recent_issues_JSON = [];
+		$parsed_issues = [];
 		$user_teams = $this->getUser()->getTeams();
 		$user_id = $this->getUser()->getID();
 		$limit = intval($request['limit']);
@@ -152,10 +149,10 @@ class Main extends Action
 		{
 			$limit = 10;
 		}
-		$issuestable = tables\Issues::getTable();
+		$issues_table = tables\Issues::getTable();
 		foreach ($user_teams as $team)
 		{
-			$crit = $issuestable->getCriteria();
+			$crit = $issues_table->getCriteria();
 			$crit->addWhere(tables\Issues::DELETED, false);
 			$crit->addWhere(tables\Issues::POSTED_BY, $user_id);
 			$crit->addOr(tables\Issues::BEING_WORKED_ON_BY_USER, $user_id);
@@ -164,55 +161,48 @@ class Main extends Action
 			$crit->addOr(tables\Issues::OWNER_USER, $user_id);
 			$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
 			$crit->setLimit($limit);
-			foreach ($issuestable->select($crit) as $issue){
-				if(!in_array($issue->getID(), $parsedIssues))
+			foreach ($issues_table->select($crit) as $issue){
+				if(!in_array($issue->getID(), $parsed_issues))
 				{
-					$recentIssuesJSON[]	= $issue->toJSON(false);
-					$parsedIssues[] = $issue->getID();
+					$recent_issues_JSON[]	= $issue->toJSON(false);
+					$parsed_issues[] = $issue->getID();
 				}
 			}
 		}
-		return $this->json($recentIssuesJSON);
+		return $this->json($recent_issues_JSON);
 	}
 
 	public function runListAssignedIssues(Request $request)
 	{
-		$assignedIssues = [];
+		$assigned_issues = [];
 		$user = $this->getUser();
-		
 		foreach ($user->getUserAssignedIssues() as $issue)
 		{
-			$assignedIssues[] = $issue->toJSON(false);
+			$assigned_issues[] = $issue->toJSON(false);
 		}
-		
-		return $this->json($assignedIssues);
+		return $this->json($assigned_issues);
 	}
 	
 	public function runListIssueTypes(Request $request)
 	{
-		$issuetypes = [];
-	
+		$issue_types = [];
 		$project_id = trim($request['project_id']);
 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-	
-		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issueType){
-			$issuetypes[] = $issueType->toJSON(false);
+		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issue_type){
+			$issue_types[] = $issue_type->toJSON(false);
 		}
-	
-		return $this->json($issuetypes);
+		return $this->json($issue_types);
 	}
 
 	public function runListStarredIssues(Request $request)
 	{
-		$starredissues = [];
+		$starred_issues = [];
 		$user = $this->getUser();
-
-		foreach ($user->getStarredIssues() as $starredIssue)
+		foreach ($user->getStarredIssues() as $starred_issue)
 		{
-			$starredissues[] = $starredIssue->toJSON(false);
+			$starred_issues[] = entities\Issue::getB2DBTable()->selectById($starred_issue)->toJSON(false);
 		}
-		
-		return $this->json($starredissues);
+		return $this->json($starred_issues);
 	}
 	
 	public function runToggleFavouriteIssue(Request $request)

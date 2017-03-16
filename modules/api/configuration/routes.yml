@@ -54,7 +54,7 @@ api_list_user_issues:
     parameters: [ ]
     csrf_enabled: false
     
-api_list_recent_issues:
+api_list_user_recent_issues:
     route: /api/issues/recent
     module: api
     action: listUserRecentIssues
@@ -86,5 +86,13 @@ api_toggle_favourite_issue:
     route: /api/issues/:issue_id/toggle-favourite
     module: api
     action: toggleFavouriteIssue
+    parameters: [ ]
+    csrf_enabled: false
+    
+api_insert_issue:
+    project_reportissue:
+    route: /:project_key/issues/new/
+    module: main
+    action: insertIssue
     parameters: [ ]
     csrf_enabled: false
