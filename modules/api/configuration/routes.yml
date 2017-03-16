@@ -97,8 +97,7 @@ api_toggle_favourite_issue:
     csrf_enabled: false
     
 api_insert_issue:
-    project_reportissue:
-    route: /:project_key/issues/new/
+    route: /api/:project_key/issues/new
     module: main
     action: insertIssue
     parameters: [ ]
