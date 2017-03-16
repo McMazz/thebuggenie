@@ -68,6 +68,35 @@ class Main extends Action
 		return $this->json($user);
 	}
 	
+	public function runListIssuesByRecentActivities(Request $request)
+	{
+		$issues_JSON = [];
+		$issues_ids= [];
+		$project_id = trim($request['project_id']);
+		$limit = intval($request['limit']);
+		if($limit == 0){
+			$limit = 10;
+		}
+		foreach($this->getUser()->getAssociatedProjects() as $project){
+			if($project->getID() == $project_id){
+				foreach($project->getRecentActivities($limit,false,null,true) as $activities)
+				{
+					foreach ($activities as $activity){
+						if(!in_array($activity["target"], $issues_ids)){
+							$issues_ids[] = $activity["target"];
+						}
+					}
+				}
+			}
+		}
+		
+		foreach ($issues_ids as $issue)
+		{
+			$issues_JSON[] = entities\Issue::getB2DBTable()->selectById($issue)->toJSON(false);
+		}
+		return $this->json($issues_JSON);
+	}
+	
 	public function runListTeams(Request $request)
 	{
 		$teams = [];		
@@ -138,7 +167,7 @@ class Main extends Action
 		return $this->json($ret_issues);
 	}
 	
-	public function runListUserRecentIssues(Request $request)
+	public function runListUserRelatedIssues(Request $request)
 	{
 		$recent_issues_JSON = [];
 		$recent_issues = [];

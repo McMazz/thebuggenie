@@ -54,10 +54,17 @@ api_list_user_issues:
     parameters: [ ]
     csrf_enabled: false
     
-api_list_user_recent_issues:
+api_list_user_related_issues:
     route: /api/issues/recent
     module: api
-    action: listUserRecentIssues
+    action: listUserRelatedIssues
+    parameters: [ ]
+    csrf_enabled: false
+
+api_issues_by_recent_activities:
+    route: /api/issues/:project_id/activities
+    module: api
+    action: listIssuesByRecentActivities
     parameters: [ ]
     csrf_enabled: false
     
