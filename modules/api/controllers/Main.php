@@ -141,6 +141,7 @@ class Main extends Action
 	public function runListUserRecentIssues(Request $request)
 	{
 		$recent_issues_JSON = [];
+		$recent_issues = [];
 		$parsed_issues = [];
 		$user_teams = $this->getUser()->getTeams();
 		$user_id = $this->getUser()->getID();
@@ -154,19 +155,32 @@ class Main extends Action
 		{
 			$crit = $issues_table->getCriteria();
 			$crit->addWhere(tables\Issues::DELETED, false);
-			$crit->addWhere(tables\Issues::POSTED_BY, $user_id);
+			$crit->addWhere(tables\Issues::ASSIGNEE_TEAM, $team->getID());
+			$crit->addOr(tables\Issues::POSTED_BY, $user_id);
 			$crit->addOr(tables\Issues::BEING_WORKED_ON_BY_USER, $user_id);
 			$crit->addOr(tables\Issues::ASSIGNEE_USER, $user_id);
-			$crit->addWhere(tables\Issues::ASSIGNEE_TEAM, $team);
 			$crit->addOr(tables\Issues::OWNER_USER, $user_id);
 			$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
 			$crit->setLimit($limit);
 			foreach ($issues_table->select($crit) as $issue){
-				if(!in_array($issue->getID(), $parsed_issues))
-				{
-					$recent_issues_JSON[]	= $issue->toJSON(false);
-					$parsed_issues[] = $issue->getID();
-				}
+				$recent_issues[]	= $issue;
+			}
+		}
+		$crit = $issues_table->getCriteria();
+		$crit->addWhere(tables\Issues::DELETED, false);
+		$crit->addWhere(tables\Issues::POSTED_BY, $user_id);
+		$crit->addOr(tables\Issues::BEING_WORKED_ON_BY_USER, $user_id);
+		$crit->addOr(tables\Issues::ASSIGNEE_USER, $user_id);
+		$crit->addOr(tables\Issues::OWNER_USER, $user_id);
+		$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
+		$crit->setLimit($limit);
+		foreach ($issues_table->select($crit) as $issue){
+			$recent_issues[]	= $issue;
+		}
+		foreach ($recent_issues as $issue){
+			if(!in_array($issue->getID(), $parsed_issues)){
+				$recent_issues_JSON[] = $issue->toJSON(false);
+				$parsed_issues[] = $issue->getID();
 			}
 		}
 		return $this->json($recent_issues_JSON);
