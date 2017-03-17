@@ -275,17 +275,31 @@ class Main extends Action
 			$retval = $user->addStarredIssue($issue_id);
 		}
 		return $this->json([
-				'starred' => $retval ? "true" : "false", // Action::renderJSON turns everything into strings... @TODO: change ::json implementation
+				'starred' => $retval ? "true" : "false",
 				'count' => count($issue->getSubscribers())
 		]);
 	}
 	
 	public function runInsertIssue(Request $request)
 	{
-		$insert_Object = new \thebuggenie\core\modules\main\controllers\Main;
+		$insert_obj = new \thebuggenie\core\modules\main\controllers\Main;
 		$action = "noaction";
-		$insert_Object->preExecute($request,$action);
-		$insert_Object->runReportIssue($request);
+		$insert_obj->preExecute($request,$action);
+		$insert_obj->runReportIssue($request);
+		$messages;
+		if(isset($insert_obj['errors']))
+		{
+			$messages['errors'] = $insert_obj['errors'];
+		}
+		if(isset($insert_obj['permission_errors']))
+		{
+			$messages['permission_errors'] = $insert_obj['permission_errors'];
+		}
+		if(isset($insert_obj['options']))
+		{
+			$messages['options'] = $insert_obj['options'];
+		}
+		return $this->json($messages);
 	}
 	
 	/**

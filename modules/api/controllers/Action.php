@@ -13,9 +13,12 @@ class Action extends FrameworkAction
 		{
 			$this->getResponse()->setHttpStatus(intval($code));
 		}
-		return $this->renderJSON($data);
+		$this->getResponse()->setContentType('application/json');
+		$this->getResponse()->setDecoration(\thebuggenie\core\framework\Response::DECORATE_NONE);
+		echo json_encode($data);
+		return true;
 	}
-
+	
 	protected function log($message, $level = Logging::LEVEL_INFO)
 	{
 		Logging::log($message, 'api', $level);
