@@ -121,11 +121,24 @@ class Main extends Action
 	{
 		$editions = [];
 		$project_id = trim($request['project_id']);
-		$editions_table = tables\Editions::getTable();
-		$crit = $editions_table->getCriteria();
-		$crit->addWhere(tables\Editions::PROJECT, $project_id);
+		$editions_table = entities\tables\Editions::getTable();
+ 		$crit = $editions_table->getCriteria();
+ 		$crit->addWhere(tables\Editions::PROJECT, $project_id);
 		foreach ($editions_table->select($crit) as $edition){
-			$editions[] = $edition->toJSON(true);
+			$edition_entity = entities\Edition::getB2DBTable()->selectById($edition->getID());
+			$owner = "";
+			$leader = "";
+			$qa_responsible_user = "";
+			if($edition->getLeader() != null){
+				$leader = $edition->getLeader()->getID();
+			}
+			if($edition->getOwner() != null){
+				$owner = $edition->getOwner()->getID();
+			}
+			if($edition->getQaresponsible() != null){
+				$qa_responsible_user = $edition->getQaresponsible()->getID();
+			}
+			$editions[] = array(tables\Editions::ID => $edition->getID(),tables\Editions::NAME => $edition_entity->getName(), tables\Editions::DESCRIPTION => $edition_entity->getDescription(), tables\Editions::LEAD_BY => $leader, tables\Editions::OWNED_BY => $owner, tables\Editions::QA => $qa_responsible_user);
 		}
 		return $this->json($editions);
 	}
@@ -134,11 +147,24 @@ class Main extends Action
 	{
 		$components = [];
 		$project_id = trim($request['project_id']);
-		$components_table = tables\Components::getTable();
+		$components_table = entities\tables\Components::getTable();
 		$crit = $components_table->getCriteria();
 		$crit->addWhere(tables\Components::PROJECT, $project_id);
-		foreach ($components_table->select($crit, false) as $component){
-			$components[] = $component->toJSON(false);
+		foreach ($components_table->select($crit) as $component){
+			$component_entity = entities\Component::getB2DBTable()->selectById($component->getID());
+			$owner = "";
+			$leader = "";
+			$qa_responsible_user = "";
+			if($component->getLeader() != null){
+				$leader = $component->getLeader()->getID();
+			}
+			if($component->getOwner() != null){
+				$owner = $component->getOwner()->getID();
+			}
+			if($component->getQaresponsible() != null){
+				$qa_responsible_user = $component->getQaresponsible()->getID();
+			}
+			$components[] = array(tables\Components::ID => $component->getID(),tables\Components::NAME => $component_entity->getName(), tables\Components::LEAD_BY => $leader, tables\Components::B2DBNAME . "owner" => $owner, tables\Components::B2DBNAME . "qa_responsible" => $qa_responsible_user);
 		}
 		return $this->json($components);
 	}
