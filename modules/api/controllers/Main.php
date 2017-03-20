@@ -312,7 +312,7 @@ class Main extends Action
 		$action = "noaction";
 		$insert_obj->preExecute($request,$action);
 		$insert_obj->runReportIssue($request);
-		$messages;
+		$messages = [];
 		if(isset($insert_obj['errors']))
 		{
 			$messages['errors'] = $insert_obj['errors'];
