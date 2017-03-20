@@ -89,7 +89,6 @@ class Main extends Action
 				}
 			}
 		}
-		
 		foreach ($issues_ids as $issue)
 		{
 			$issues_JSON[] = entities\Issue::getB2DBTable()->selectById($issue)->toJSON(false);

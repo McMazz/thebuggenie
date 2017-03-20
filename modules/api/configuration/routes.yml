@@ -20,7 +20,7 @@ api_user_details:
     csrf_enabled: false
     
 api_user_teams:
-    route: /api/me/teams
+    route: /api/teams
     module: api
     action: listTeams
     parameters: [ ]
@@ -55,7 +55,7 @@ api_list_user_issues:
     csrf_enabled: false
     
 api_list_user_related_issues:
-    route: /api/issues/recent
+    route: /api/issues/related
     module: api
     action: listUserRelatedIssues
     parameters: [ ]
@@ -76,7 +76,7 @@ api_list_assigned_issues:
     csrf_enabled: false
     
 api_list_issues_type_by_project:
-    route: /api/issues/types
+    route: /api/projects/:project_id/issuetypes
     module: api
     action: listIssueTypes
     parameters: [ ]
