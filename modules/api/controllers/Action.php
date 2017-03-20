@@ -7,7 +7,7 @@ use thebuggenie\core\framework\Logging;
 
 class Action extends FrameworkAction
 {
-	protected function json(array $data = [], $code = null)
+	protected function json($data = [], $code = null)
 	{
 		if($code != null)
 		{

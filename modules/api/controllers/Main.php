@@ -168,28 +168,50 @@ class Main extends Action
 		return $this->json($components);
 	}
 	
-	public function runListIssues(Request $request)
+	public function runIssues(Request $request)
 	{
-		$text = trim($request['search']);
-		$limit = intval($request['paginate']);
-		$offset = intval($request['page']);
-		if($limit == 0)
+		if($request->isPost())
 		{
-			$limit = 10;
+			$insert_obj = new \thebuggenie\core\modules\main\controllers\Main;
+			$insert_obj->preExecute($request,"reportIssue");
+			$insert_obj->runReportIssue($request);
+			if(!empty($insert_obj->errors))
+			{
+				return $this->json(['errors' => $insert_obj->errors], Response::HTTP_STATUS_BAD_REQUEST);
+			}
+			if(!empty($insert_obj->permission_errors))
+			{
+				return $this->json(['errors' => $insert_obj->permission_errors], Response::HTTP_STATUS_FORBIDDEN);
+			}
+			if($insert_obj->issue == NULL)
+			{
+				return $this->json(['error' => 'Something went wrong.'], 500);
+			}
+			return $this->json($insert_obj->issue->toJSON());
 		}
-		if($offset != 0)
+		else
 		{
-			$offset -= 1;
-			$offset *= $limit;
+			$text = trim($request['search']);
+			$limit = intval($request['paginate']);
+			$offset = intval($request['page']);
+			if($limit == 0)
+			{
+				$limit = 10;
+			}
+			if($offset != 0)
+			{
+				$offset -= 1;
+				$offset *= $limit;
+			}
+			$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
+			$issues = entities\Issue::findIssues($filters, $limit, $offset);
+			$ret_issues = [];
+			foreach ($issues[0] as $issue)
+			{
+				$ret_issues[] = $issue->toJSON(false);
+			}
+			return $this->json($ret_issues);
 		}
-		$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
-		$issues = entities\Issue::findIssues($filters, $limit, $offset);
-		$ret_issues = [];
-		foreach ($issues[0] as $issue)
-		{
-			$ret_issues[] = $issue->toJSON(false);
-		}
-		return $this->json($ret_issues);
 	}
 	
 	public function runListUserRelatedIssues(Request $request)
@@ -303,28 +325,6 @@ class Main extends Action
 				'starred' => $retval ? "true" : "false",
 				'count' => count($issue->getSubscribers())
 		]);
-	}
-	
-	public function runInsertIssue(Request $request)
-	{
-		$insert_obj = new \thebuggenie\core\modules\main\controllers\Main;
-		$action = "noaction";
-		$insert_obj->preExecute($request,$action);
-		$insert_obj->runReportIssue($request);
-		$messages = [];
-		if(isset($insert_obj['errors']))
-		{
-			$messages['errors'] = $insert_obj['errors'];
-		}
-		if(isset($insert_obj['permission_errors']))
-		{
-			$messages['permission_errors'] = $insert_obj['permission_errors'];
-		}
-		if(isset($insert_obj['options']))
-		{
-			$messages['options'] = $insert_obj['options'];
-		}
-		return $this->json($messages);
 	}
 	
 	/**

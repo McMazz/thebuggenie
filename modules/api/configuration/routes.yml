@@ -2,103 +2,110 @@ api_health_check:
     route: /api/health
     module: api
     action: health
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_authentication:
     route: /api/auth
     module: api
     action: auth
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_user_details:
     route: /api/me
     module: api
     action: me
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
     
 api_user_teams:
     route: /api/teams
     module: api
     action: listTeams
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_list_user_projects:
     route: /api/projects
     module: api
     action: listProjects
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
     
 api_list_editions:
     route: /api/projects/:project_id/editions
     module: api
     action: listEditions
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_project_components:
     route: /api/projects/:project_id/components
     module: api
     action: listComponents
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
-api_list_user_issues:
+api_list_issues_type_by_project:
+    route: /api/projects/:project_id/issuetypes
+    module: api
+    action: listIssueTypes
+    parameters:
+        format: json
+    csrf_enabled: false
+
+api_issues:
     route: /api/issues
     module: api
-    action: listIssues
-    parameters: [ ]
+    action: issues
+    parameters:
+        format: json
     csrf_enabled: false
     
 api_list_user_related_issues:
     route: /api/issues/related
     module: api
     action: listUserRelatedIssues
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_issues_by_recent_activities:
     route: /api/issues/:project_id/activities
     module: api
     action: listIssuesByRecentActivities
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
     
 api_list_assigned_issues:
     route: /api/issues/assigned
     module: api
     action: listAssignedIssues
-    parameters: [ ]
-    csrf_enabled: false
-    
-api_list_issues_type_by_project:
-    route: /api/projects/:project_id/issuetypes
-    module: api
-    action: listIssueTypes
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
     
 api_list_starred_issues:
     route: /api/issues/starred
     module: api
     action: listStarredIssues
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
 
 api_toggle_favourite_issue:
     route: /api/issues/:issue_id/toggle-favourite
     module: api
     action: toggleFavouriteIssue
-    parameters: [ ]
-    csrf_enabled: false
-    
-api_insert_issue:
-    route: /api/issues/insert
-    module: api
-    action: insertIssue
-    parameters: [ ]
+    parameters:
+        format: json
     csrf_enabled: false
