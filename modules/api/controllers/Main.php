@@ -116,6 +116,25 @@ class Main extends Action
 		return $this->json($projects);
 	}
 	
+	protected function getItemsByType($item_type){
+		$items = [];
+		foreach (entities\tables\ListTypes::getTable()->getAllByItemType($item_type) as $item)
+		{
+			$items[] = $item->toJSON(false);
+		}
+		return $items;
+	}
+
+	public function runListSeverities(Request $request)
+	{
+		return $this->json($this->getItemsByType(entities\Datatype::SEVERITY));
+	}
+	
+	public function runListPriorities(Request $request)
+	{
+		return $this->json($this->getItemsByType(entities\Datatype::PRIORITY));
+	}
+
 	public function runListEditions(Request $request)
 	{
 		$editions = [];

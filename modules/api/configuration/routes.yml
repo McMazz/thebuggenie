@@ -32,6 +32,20 @@ api_list_user_projects:
     action: listProjects
     parameters: [ ]
     csrf_enabled: false
+
+api_list_priorities:
+    route: /api/priorities
+    module: api
+    action: listPriorities
+    parameters: [ ]
+    csrf_enabled: false
+
+api_list_severities:
+    route: /api/severities
+    module: api
+    action: listSeverities
+    parameters: [ ]
+    csrf_enabled: false   
     
 api_list_editions:
     route: /api/projects/:project_id/editions
