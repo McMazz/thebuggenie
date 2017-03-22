@@ -12,6 +12,7 @@ use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
 use b2db\Criteria;
+use thebuggenie;
 
 class Main extends Action
 {
@@ -301,6 +302,26 @@ class Main extends Action
 			$issue_types[] = $issue_type->toJSON(false);
 		}
 		return $this->json($issue_types);
+	}
+	
+	public function runListFieldsByIssueType(Request $request)
+	{
+		$fields = [];
+		$i18n = Context::getI18n();
+		$project_id = trim($request['project_id']);
+		$issue_type = intval($request['issue_type']);
+		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+		$issue_type_scheme_id = $project->getIssuetypeScheme()->getID();
+		$rows =  tables\IssueFields::getTable()->getBySchemeIDandIssuetypeID($issue_type_scheme_id,$issue_type);
+		while ($row = $rows->getNextRow()){
+			$field_key = str_replace("_", " ", ucfirst($row->get(tables\IssueFields::FIELD_KEY)));
+			$required = strcmp($row->get(tables\IssueFields::REQUIRED), 1) == 0 ? true : false;
+			$reportable = $row->get(tables\IssueFields::REPORTABLE);
+			$additional = $row->get(tables\IssueFields::ADDITIONAL);
+			$scope = $row->get(tables\IssueFields::SCOPE);
+			$fields[] = array(tables\IssueFields::FIELD_KEY => $i18n->__($field_key),tables\IssueFields::REQUIRED => $required,tables\IssueFields::REPORTABLE => $reportable,tables\IssueFields::ADDITIONAL => $additional,tables\IssueFields::SCOPE => $scope);
+		}
+		return $this->json($fields);
 	}
 
 	public function runListStarredIssues(Request $request)
