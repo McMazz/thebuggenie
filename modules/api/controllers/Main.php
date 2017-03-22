@@ -117,23 +117,71 @@ class Main extends Action
 		return $this->json($projects);
 	}
 	
-	protected function getItemsByType($item_type){
-		$items = [];
-		foreach (entities\tables\ListTypes::getTable()->getAllByItemType($item_type) as $item)
-		{
-			$items[] = $item->toJSON(false);
-		}
-		return $items;
-	}
-
-	public function runListSeverities(Request $request)
+	public function runListOptionsByItemType(Request $request)
 	{
-		return $this->json($this->getItemsByType(entities\Datatype::SEVERITY));
+		$options = [];
+		$item_type = trim($request['item_type']);
+		$is_custom = trim($request['is_custom']);
+		if(strcmp($is_custom, "true") == 0){
+			$options = $this->getListOptionsByCustomItemType($item_type);
+		}else{
+			$options = $this->getListOptionsByItemType($item_type);
+		}
+		return $this->json($options);
 	}
 	
-	public function runListPriorities(Request $request)
+	protected function getListOptionsByItemType($item_type)
 	{
-		return $this->json($this->getItemsByType(entities\Datatype::PRIORITY));
+		$options = [];
+		foreach (entities\tables\ListTypes::getTable()->getAllByItemType($item_type) as $option)
+		{
+			$options[] = $option->toJSON(false);
+		}
+		return $options;
+	}
+	
+	protected function getListOptionsByCustomItemType($item_type)
+	{
+		$options = [];
+		$custom_fields = tables\CustomFields::getTable()->getAll();
+		$custom_fields_id = [];
+		foreach ($custom_fields as $custom_field)
+		{
+			$custom_fields_id[$custom_field->getKey()] = $custom_field->getItemType();
+		}
+		$custom_fields_options_table = tables\CustomFieldOptions::getTable();
+		$crit = $custom_fields_options_table->getCriteria();
+		$crit->addWhere(tables\CustomFieldOptions::CUSTOMFIELD_ID, $custom_fields_id[$item_type]);
+		foreach ($custom_fields_options_table->select($crit) as $option)
+		{
+			$options[] = $option->toJSON(false);
+		}
+		return $options;
+	}
+	
+	public function runListItemTypes(Request $request)
+	{
+		$types = [];
+		foreach (tables\ListTypes::getTable()->selectAll() as $type)
+		{
+			if(!in_array($type->getItemType(), $types))
+			{
+				$types[] = $type->getItemType();
+			}
+		}
+		return $this->json($types);
+	}
+	
+	public function runListOptionsByCustomItemType(Request $request){
+		$custom_options = [];
+		$item_type = trim($request['item_type']);
+		$custom_options_table = tables\CustomFieldOptions::getTable();
+		$crit = $custom_options_table->getCriteria();
+		foreach (entities\tables\CustomFieldOptions::getTable() as $opt)
+		{
+			$custom_options[] = $option->toJSON(false);
+		}
+		return $this->json($custom_options);
 	}
 
 	public function runListEditions(Request $request)
@@ -157,7 +205,7 @@ class Main extends Action
 			if($edition->getQaresponsible() != null){
 				$qa_responsible_user = $edition->getQaresponsible()->getID();
 			}
-			$editions[] = array(tables\Editions::ID => $edition->getID(),tables\Editions::NAME => $edition_entity->getName(), tables\Editions::DESCRIPTION => $edition_entity->getDescription(), tables\Editions::LEAD_BY => $leader, tables\Editions::OWNED_BY => $owner, tables\Editions::QA => $qa_responsible_user);
+			$editions[] = [tables\Editions::ID => $edition->getID(),tables\Editions::NAME => $edition_entity->getName(), tables\Editions::DESCRIPTION => $edition_entity->getDescription(), tables\Editions::LEAD_BY => $leader, tables\Editions::OWNED_BY => $owner, tables\Editions::QA => $qa_responsible_user];
 		}
 		return $this->json($editions);
 	}
@@ -313,17 +361,35 @@ class Main extends Action
 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
 		$issue_type_scheme_id = $project->getIssuetypeScheme()->getID();
 		$rows =  tables\IssueFields::getTable()->getBySchemeIDandIssuetypeID($issue_type_scheme_id,$issue_type);
+		$custom_fields = tables\CustomFields::getTable()->getAll();
+		$custom_fields_keys = [];
+		foreach ($custom_fields as $field){
+			$custom_fields_keys[] = strtolower($field->getName());
+		}
 		while ($row = $rows->getNextRow()){
-			$field_key = str_replace("_", " ", ucfirst($row->get(tables\IssueFields::FIELD_KEY)));
-			$required = strcmp($row->get(tables\IssueFields::REQUIRED), 1) == 0 ? true : false;
-			$reportable = $row->get(tables\IssueFields::REPORTABLE);
-			$additional = $row->get(tables\IssueFields::ADDITIONAL);
-			$scope = $row->get(tables\IssueFields::SCOPE);
-			$fields[] = array(tables\IssueFields::FIELD_KEY => $i18n->__($field_key),tables\IssueFields::REQUIRED => $required,tables\IssueFields::REPORTABLE => $reportable,tables\IssueFields::ADDITIONAL => $additional,tables\IssueFields::SCOPE => $scope);
+			$field_key = $row->get(tables\IssueFields::FIELD_KEY);
+			$is_custom = false;
+			$field_name;
+			if(!in_array($field_key, $custom_fields_keys))
+			{
+				$field_name = str_replace("_", " ", ucfirst($field_key));
+				$field_name = $i18n->__($field_name);
+			}else{
+				$field_name = $custom_fields[$field_key]->getName();
+				$is_custom = true;
+			}
+			$required = $this->stringToBoolean($row->get(tables\IssueFields::REQUIRED));
+			$reportable = $this->stringToBoolean($row->get(tables\IssueFields::REPORTABLE));
+			$additional = $this->stringToBoolean($row->get(tables\IssueFields::ADDITIONAL));
+			$fields[] = ["ID" => $row->get(tables\IssueFields::ID), "FIELDNAME" => $field_name, "FIELDKEY" => $field_key ,"REQUIRED" => $required, "REPORTABLE" => $reportable, "ADDITIONAL" => $additional, "IS_CUSTOM" => $is_custom];
 		}
 		return $this->json($fields);
 	}
-
+	
+	protected function stringToBoolean($value){
+		return strcmp($value, "1") == 0 ? true : false;
+	}
+	
 	public function runListStarredIssues(Request $request)
 	{
 		$starred_issues = [];
