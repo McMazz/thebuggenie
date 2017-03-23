@@ -161,7 +161,7 @@ class Main extends Action
 		foreach ($time_spent_table->select($crit) as $issue)
 		{
 			$time_spent_data = tables\IssueSpentTimes::getTable()->getSpentTimeSumsByIssueId($issue->getIssueID());
-			$issues[] = ["issue_id" => $issue->getIssueID(),"points" => $time_spent_data['points'],"hours" => $time_spent_data['hours'],"minutes" =>  $time_spent_data['minutes']];
+			$issues[] = ["id" => $issue->getIssueID(),"points" => $time_spent_data['points'],"hours" => $time_spent_data['hours'],"minutes" =>  $time_spent_data['minutes']];
 		}
 		return $this->json($issues);
 	}
@@ -204,7 +204,7 @@ class Main extends Action
 			{
 				$qa_responsible_user = $edition->getQaresponsible()->getID();
 			}
-			$editions[] = [tables\Editions::ID => $edition->getID(),tables\Editions::NAME => $edition_entity->getName(), tables\Editions::DESCRIPTION => $edition_entity->getDescription(), tables\Editions::LEAD_BY => $leader, tables\Editions::OWNED_BY => $owner, tables\Editions::QA => $qa_responsible_user];
+			$editions[] = ["id" => $edition->getID(),"name" => $edition_entity->getName(), "description" => $edition_entity->getDescription(), "leader" => $leader, "owner" => $owner, "qa_responsible" => $qa_responsible_user];
 		}
 		return $this->json($editions);
 	}
@@ -234,7 +234,7 @@ class Main extends Action
 			{
 				$qa_responsible_user = $component->getQaresponsible()->getID();
 			}
-			$components[] = array(tables\Components::ID => $component->getID(),tables\Components::NAME => $component_entity->getName(), tables\Components::LEAD_BY => $leader, tables\Components::B2DBNAME . "owner" => $owner, tables\Components::B2DBNAME . "qa_responsible" => $qa_responsible_user);
+			$components[] = ["id" => $component->getID(),"name" => $component_entity->getName(), "leader" => $leader, "owner" => $owner, "qa_responsible" => $qa_responsible_user];
 		}
 		return $this->json($components);
 	}
@@ -258,7 +258,7 @@ class Main extends Action
 			{
 				return $this->json(['error' => 'Something went wrong.'], 500);
 			}
-			return $this->json($insert_obj->issue->toJSON());
+			return $this->json($insert_obj->issue->toJSON(false));
 		}
 		else
 		{
@@ -399,7 +399,7 @@ class Main extends Action
 			{
 				$options = $this->getListOptionsByItemType($field_key);
 			}
-			$fields[] = ["ID" => $row->get(tables\IssueFields::ID), "FIELDNAME" => $field_name, "FIELDKEY" => $field_key ,"REQUIRED" => $required, "REPORTABLE" => $reportable, "ADDITIONAL" => $additional, "OPTIONS" => $options];
+			$fields[] = ["id" => $row->get(tables\IssueFields::ID), "name" => $field_name, "key" => $field_key ,"required" => $required, "reportable" => $reportable, "additional" => $additional, "options" => $options];
 		}
 		return $this->json($fields);
 	}
@@ -476,7 +476,7 @@ class Main extends Action
 			$retval = $user->addStarredIssue($issue_id);
 		}
 		return $this->json([
-				'starred' => $retval ? "true" : "false",
+				'starred' => $retval,
 				'count' => count($issue->getSubscribers())
 		]);
 	}
