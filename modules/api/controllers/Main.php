@@ -117,12 +117,57 @@ class Main extends Action
 		return $this->json($projects);
 	}
 	
+	public function runListTimeSpentBetweenDates(Request $request)
+	{
+		$issues = [];
+		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
+		$is_admin = false;
+		foreach (entities\Group::getAll() as $group){
+			if($group->getName() == "Administrators")
+			{
+				$administrators = $group->getMembers();
+				foreach ($administrators as $admin)
+				{
+					if($admin->getID() == $current_user_id){
+						$is_admin = true;
+						break;
+					}
+				}
+			}
+		}
+		if ($is_admin)
+		{
+			$user_id = trim($request['user_id']);
+		}
+		elseif (!$is_admin && !empty(trim($request['user_id'])))
+		{
+			return $this->json(['error' => "You don't have administrative privileges."], 403);
+		}
+		else
+		{
+			$user_id = $current_user_id;
+		}
+		$date_from = trim($request['date_from']);
+		$date_to = trim($request['date_to']);
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_BY, $user_id);
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_from, $crit::DB_GREATER_THAN_EQUAL);
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_to, $crit::DB_LESS_THAN_EQUAL);
+		foreach ($time_spent_table->select($crit) as $issue)
+		{
+			$time_spent_data = tables\IssueSpentTimes::getTable()->getSpentTimeSumsByIssueId($issue->getIssueID());
+			$issues[] = ["issue_id" => $issue->getIssueID(),"points" => $time_spent_data['points'],"hours" => $time_spent_data['hours'],"minutes" =>  $time_spent_data['minutes']];
+		}
+		return $this->json($issues);
+	}
+	
 	public function runListOptionsByItemType(Request $request)
 	{
 		$options = [];
 		$item_type = trim($request['item_type']);
 		$is_custom = trim($request['is_custom']);
-		if(strcmp($is_custom, "true") == 0){
+		if($is_custom == "true"){
 			$options = $this->getListOptionsByCustomItemType($item_type);
 		}else{
 			$options = $this->getListOptionsByItemType($item_type);
@@ -387,7 +432,7 @@ class Main extends Action
 	}
 	
 	protected function stringToBoolean($value){
-		return strcmp($value, "1") == 0 ? true : false;
+		return $value == "1"? true : false;
 	}
 	
 	public function runListStarredIssues(Request $request)

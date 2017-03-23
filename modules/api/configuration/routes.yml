@@ -102,6 +102,14 @@ api_list_user_related_issues:
         format: json
     csrf_enabled: false
 
+api_list_user_time_spent:
+    route: /api/issues/timespent
+    module: api
+    action: listTimeSpentBetweenDates
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_issues_by_recent_activities:
     route: /api/issues/:project_id/activities
     module: api
