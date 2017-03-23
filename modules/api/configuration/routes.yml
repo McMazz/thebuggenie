@@ -30,22 +30,6 @@ api_user_teams:
         format: json
     csrf_enabled: false
 
-api_list_item_types:
-    route: /api/itemtypes
-    module: api
-    action: listItemTypes
-    parameters: 
-        format: json
-    csrf_enabled: false
-
-api_list_options_by_item_type:
-    route: /api/itemtypes/:item_type/options
-    module: api
-    action: listOptionsByItemType
-    parameters: 
-        format: json
-    csrf_enabled: false
-
 api_list_user_projects:
     route: /api/projects
     module: api
