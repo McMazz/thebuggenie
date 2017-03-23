@@ -111,7 +111,7 @@ api_list_user_time_spent:
     csrf_enabled: false
 
 api_issues_by_recent_activities:
-    route: /api/issues/:project_id/activities
+    route: /api/issues/recent
     module: api
     action: listIssuesByRecentActivities
     parameters:

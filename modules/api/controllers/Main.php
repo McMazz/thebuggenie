@@ -73,19 +73,19 @@ class Main extends Action
 	{
 		$issues_JSON = [];
 		$issues_ids= [];
-		$project_id = trim($request['project_id']);
 		$limit = intval($request['limit']);
-		if($limit == 0){
-			$limit = 10;
+		if ($limit == 0){
+			$limit = 5;
 		}
-		foreach($this->getUser()->getAssociatedProjects() as $project){
-			if($project->getID() == $project_id){
-				foreach($project->getRecentActivities($limit,false,null,true) as $activities)
+		foreach($this->getUser()->getAssociatedProjects() as $project)
+		{
+			foreach($project->getRecentActivities($limit,false,null,true) as $activities)
+			{
+				foreach ($activities as $activity)
 				{
-					foreach ($activities as $activity){
-						if(!in_array($activity["target"], $issues_ids)){
-							$issues_ids[] = $activity["target"];
-						}
+					if(!in_array($activity["target"], $issues_ids))
+					{
+						$issues_ids[] = $activity["target"];
 					}
 				}
 			}
