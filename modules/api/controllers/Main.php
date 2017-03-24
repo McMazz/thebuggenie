@@ -2,16 +2,15 @@
 
 namespace thebuggenie\modules\api\controllers;
 
+use b2db\Criteria;
 use thebuggenie\core\entities;
-use thebuggenie\core\entities\tables;
 use thebuggenie\core\entities\Issue;
-use thebuggenie\core\entities\Issuetype;
 use thebuggenie\core\entities\Project;
+use thebuggenie\core\entities\tables;
 use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
-use b2db\Criteria;
 use thebuggenie;
 
 class Main extends Action
