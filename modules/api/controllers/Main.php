@@ -141,11 +141,11 @@ class Main extends Action
 		}
 		if ($is_admin)
 		{
-			$user_id = trim($request['user_id']);
+			$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
 		}
 		elseif (!$is_admin && !empty(trim($request['user_id'])))
 		{
-			return $this->json(['error' => "You don't have administrative privileges."], 403);
+			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN); //TODO
 		}
 		else
 		{
