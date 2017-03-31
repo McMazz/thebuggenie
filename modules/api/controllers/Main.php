@@ -144,7 +144,7 @@ class Main extends Action
 		}
 		elseif (!$is_admin && !empty(trim($request['user_id'])))
 		{
-			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN); //TODO
+			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
 		}
 		else
 		{
@@ -480,6 +480,52 @@ class Main extends Action
 		]);
 	}
 	
+	public function runListActivityForIssue(Request $request)
+	{
+		$activities = [];
+		$activities_id = [];
+		$issue_id = trim($request['issue_id']);
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(tables\IssueSpentTimes::ISSUE_ID, $issue_id);
+		foreach ($time_spent_table->select($crit) as $issue)
+		{
+			$activities_id[] = $issue->getID();
+		}
+		$activities_table = tables\IssueSpentTimes::getTable();
+		foreach ($activities_id as $activity_id)
+		{
+			$crit2 = $activities_table->getCriteria();
+			$crit2->addWhere(tables\IssueSpentTimes::ID, $activity_id);
+			foreach ($activities_table->select($crit2) as $activity)
+			{
+				$edited_at = $activity->getEditedAt();
+				$user =  $activity->getUser()->getID();
+				$spent_months = $activity->getSpentMonths();
+				$spent_weeks = $activity->getSpentWeeks();
+				$spent_days = $activity->getSpentDays();
+				$spent_hours = $activity->getSpentHours();
+				$spent_minutes = $activity->getSpentMinutes();
+				$spent_points = $activity->getSpentPoints();
+				$activity_type = $this->getNameActivityByID($activity->getActivityTypeID());
+				$comment = $activity->getComment();
+				$activities[] = ["user_id" => $user,"inserted" => $edited_at,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type" => $activity_type];
+			}
+		}
+		return $this->json($activities);
+	}
+	
+	protected function getNameActivityByID($activity_id)
+	{
+		$activity_types = $this->getListOptionsByItemType("activitytype");
+		foreach ($activity_types as $activity_type) 
+		{
+			if($activity_type['id'] == $activity_id)
+			{
+				return $activity_type['name'];
+			}
+		}
+	}
 	/**
 	 *
 	 * @param string $username

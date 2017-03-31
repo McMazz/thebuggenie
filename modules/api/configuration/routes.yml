@@ -118,6 +118,14 @@ api_list_starred_issues:
         format: json
     csrf_enabled: false
 
+api_list_activities_by_issue:
+    route: /api/issues/:issue_id/activities
+    module: api
+    action: listActivityForIssue
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_toggle_favourite_issue:
     route: /api/issues/:issue_id/toggle-favourite
     module: api
