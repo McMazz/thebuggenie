@@ -480,39 +480,70 @@ class Main extends Action
 		]);
 	}
 	
-	public function runListActivityForIssue(Request $request)
+	public function runListActivityTypes(Request $request)
 	{
-		$activities = [];
-		$activities_id = [];
+		return $this->json($this->getListOptionsByItemType("activitytype"));
+	}
+	
+	public function runActivities(Request $request)
+	{
 		$issue_id = trim($request['issue_id']);
-		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
-		$crit = $time_spent_table->getCriteria();
-		$crit->addWhere(tables\IssueSpentTimes::ISSUE_ID, $issue_id);
-		foreach ($time_spent_table->select($crit) as $issue)
+		if($request->isPost())
 		{
-			$activities_id[] = $issue->getID();
+			$request['hours'] *= 100;
+			$spenttime = new \thebuggenie\core\entities\IssueSpentTime();
+			$spenttime->setIssue($issue_id);
+			$spenttime->setUser(\thebuggenie\core\framework\Context::getUser());
+			$spenttime->setSpentPoints($request['points']);
+			$spenttime->setSpentMinutes($request['minutes']);
+			$spenttime->setSpentHours($request['hours']);
+			$spenttime->setSpentDays($request['days']);
+			$spenttime->setSpentWeeks($request['weeks']);
+			$spenttime->setSpentMonths($request['months']);
+			$spenttime->setActivityType($request['timespent_activitytype']);
+			$spenttime->setComment($request['timespent_comment']);
+			$spenttime->save();
+			return $this->json($this->getFieldsActivityByID($spenttime->getID()));
 		}
-		$activities_table = tables\IssueSpentTimes::getTable();
-		foreach ($activities_id as $activity_id)
-		{
-			$crit2 = $activities_table->getCriteria();
-			$crit2->addWhere(tables\IssueSpentTimes::ID, $activity_id);
-			foreach ($activities_table->select($crit2) as $activity)
+		else{
+			$activities = [];
+			$activities_id = [];
+			$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+			$crit = $time_spent_table->getCriteria();
+			$crit->addWhere(tables\IssueSpentTimes::ISSUE_ID, $issue_id);
+			foreach ($time_spent_table->select($crit) as $issue)
 			{
-				$edited_at = $activity->getEditedAt();
-				$user =  $activity->getUser()->getID();
-				$spent_months = $activity->getSpentMonths();
-				$spent_weeks = $activity->getSpentWeeks();
-				$spent_days = $activity->getSpentDays();
-				$spent_hours = $activity->getSpentHours();
-				$spent_minutes = $activity->getSpentMinutes();
-				$spent_points = $activity->getSpentPoints();
-				$activity_type = $this->getNameActivityByID($activity->getActivityTypeID());
-				$comment = $activity->getComment();
-				$activities[] = ["user_id" => $user,"inserted" => $edited_at,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type" => $activity_type];
+				$activities_id[] = $issue->getID();
 			}
+			foreach ($activities_id as $activity_id)
+			{
+				$activities[] = $this->getFieldsActivityByID($activity_id);
+			}
+			return $this->json($activities);
 		}
-		return $this->json($activities);
+	}
+	
+	protected function getFieldsActivityByID($activity_id)
+	{
+		$fields = [];
+		$activities_table = tables\IssueSpentTimes::getTable();
+		$crit2 = $activities_table->getCriteria();
+		$crit2->addWhere(tables\IssueSpentTimes::ID, $activity_id);
+		foreach ($activities_table->select($crit2) as $activity)
+		{
+			$edited_at = $activity->getEditedAt();
+			$user =  $activity->getUser()->getID();
+			$spent_months = $activity->getSpentMonths();
+			$spent_weeks = $activity->getSpentWeeks();
+			$spent_days = $activity->getSpentDays();
+			$spent_hours = $activity->getSpentHours();
+			$spent_minutes = $activity->getSpentMinutes();
+			$spent_points = $activity->getSpentPoints();
+			$activity_type = $this->getNameActivityByID($activity->getActivityTypeID());
+			$comment = $activity->getComment();
+			$fields[] = ["id" => $activity_id, "user_id" => $user,"inserted" => $edited_at,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type" => $activity_type];
+		}
+		return $fields;
 	}
 	
 	protected function getNameActivityByID($activity_id)

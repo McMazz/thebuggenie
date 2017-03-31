@@ -29,6 +29,14 @@ api_user_teams:
     parameters:
         format: json
     csrf_enabled: false
+    
+api_activity_types:
+    route: /api/activitytypes
+    module: api
+    action: listActivityTypes
+    parameters:
+        format: json
+    csrf_enabled: false
 
 api_list_user_projects:
     route: /api/projects
@@ -121,7 +129,7 @@ api_list_starred_issues:
 api_list_activities_by_issue:
     route: /api/issues/:issue_id/activities
     module: api
-    action: listActivityForIssue
+    action: activities
     parameters:
         format: json
     csrf_enabled: false
