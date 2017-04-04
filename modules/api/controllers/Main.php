@@ -97,6 +97,37 @@ class Main extends Action
 		return $this->json($issues_JSON);
 	}
 	
+	public function runListIssuesByProject(Request $request)
+	{
+		$issues = [];
+		$project_id = $request['project_id'];	//Si e' scelto di non fare il controllo sulla validita' per velocizzare la query
+		$limit = $request['limit'];
+		$offset = $request['offset'];
+		if($limit == null)
+		{
+			$limit = 0;
+		}
+		if($offset == null)
+		{
+			$offset = 0;
+		}
+		$issues_table = tables\Issues::getTable();
+		$crit = $issues_table->getCriteria();
+		$crit->addWhere(tables\Issues::PROJECT_ID, $project_id);
+		$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
+		$crit->setLimit($limit);
+		$crit->setOffset($offset);
+		foreach ($issues_table->select($crit) as $issue)
+		{
+			$issues[] = $issue->toJSON(false);
+		}
+		if($issues == null)
+		{
+			return $this->json(["status" => "no results or invalid project_id " . $project_id]);
+		}
+		return $this->json($issues);
+	}
+	
 	public function runListTeams(Request $request)
 	{
 		$teams = [];		

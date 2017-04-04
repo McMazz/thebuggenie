@@ -149,3 +149,11 @@ api_toggle_favourite_issue:
     parameters:
         format: json
     csrf_enabled: false
+    
+api_issue_by_project:
+    route: /api/issues/project/:project_id/list
+    module: api
+    action: listIssuesByProject
+    parameters:
+        format: json
+    csrf_enabled: false
