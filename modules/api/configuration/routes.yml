@@ -134,6 +134,14 @@ api_list_activities_by_issue:
         format: json
     csrf_enabled: false
 
+api_list_move_activity:
+    route: /api/issues/:issue_id/activities/:activity_id/move
+    module: api
+    action: moveActivity
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_toggle_favourite_issue:
     route: /api/issues/:issue_id/toggle-favourite
     module: api

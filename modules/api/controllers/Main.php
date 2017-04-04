@@ -118,11 +118,9 @@ class Main extends Action
 		return $this->json($projects);
 	}
 	
-	public function runListTimeSpentBetweenDates(Request $request)
-	{
-		$issues = [];
-		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
+	protected function isAdmin(){
 		$is_admin = false;
+		$current_user_id = Context::getUser()->getID();
 		foreach (entities\Group::getAll() as $group)
 		{
 			if($group->getName() == "Administrators")
@@ -138,6 +136,14 @@ class Main extends Action
 				}
 			}
 		}
+		return $is_admin;
+	}
+	
+	public function runListTimeSpentBetweenDates(Request $request)
+	{
+		$issues = [];
+		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
+		$is_admin = $this->isAdmin();
 		if ($is_admin)
 		{
 			$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
@@ -523,6 +529,39 @@ class Main extends Action
 		}
 	}
 	
+	public function runMoveActivity(Request $request){
+		$issue_id = trim($request['issue_id']);
+		$activity_id = trim($request['activity_id']);
+		$moved_activity = new \thebuggenie\core\entities\IssueSpentTime();
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
+		$activity = $time_spent_table->selectOne($crit);
+		if($activity == null)
+		{
+			return $this->json(["error" => "activity_id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$issues_tables = entities\Issue::getB2DBTable();
+		$crit = $issues_tables->getCriteria();
+		$crit->addWhere(tables\Issues::ID, $issue_id);
+		$issue = $issues_tables->selectOne($crit);
+		if($issue == null)
+		{
+			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		if (!$this->isAdmin())
+		{
+			if($activity->getUser() != Context::getUser())
+			{
+				return $this->json(["error" => "This activity doesn't belong to you."], Response::HTTP_STATUS_FORBIDDEN);
+			}
+		}
+		$moved_activity = $activity;
+		$moved_activity->setIssue($issue_id);
+		$moved_activity->save();
+		return $this->json(["status" => "success"]);
+	}
+
 	protected function getFieldsActivityByID($activity_id)
 	{
 		$fields = [];
