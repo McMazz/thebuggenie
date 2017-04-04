@@ -598,25 +598,42 @@ class Main extends Action
 		$crit = $activity_table->getCriteria();
 		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
 		$activity = $activity_table->selectOne($crit);
+		if($activity == null)
+		{
+			return $this->json(["error" => "activity_id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
 		$modified_activity = clone $activity;
 		if(isset($request['issue_id'])) $modified_activity->setIssue(trim($request['issue_id']));
 		if(isset($request['user_id'])) $modified_activity->setUser(trim($request['user_id']));
-		if(isset($request['edited_at'])) $modified_activity->setEditedAt(trim($request['edited_at']));
 		if(isset($request['months'])) $modified_activity->setSpentMonths(trim($request['months']));
 		if(isset($request['weeks'])) $modified_activity->setSpentWeeks(trim($request['weeks']));
 		if(isset($request['days'])) $modified_activity->setSpentDays(trim($request['days']));
 		if(isset($request['hours'])) $modified_activity->setSpentHours(trim($request['hours']));
 		if(isset($request['minutes'])) $modified_activity->setSpentMinutes(trim($request['minutes']));
 		if(isset($request['points'])) $modified_activity->setSpentPoints(trim($request['points']));
-		$this->modifyActivity($activity,$modified_activity->getIssue(),$modified_activity->getUser(),$modified_activity->getEditedAt(),$modified_activity->getSpentMonths(),$modified_activity->getSpentWeeks(),$modified_activity->getSpentDays(),$modified_activity->getSpentHours(),$modified_activity->getSpentMinutes(),$modified_activity->getSpentPoints());
+		$issues_tables = entities\Issue::getB2DBTable();
+		$crit = $issues_tables->getCriteria();
+		$crit->addWhere(tables\Issues::ID, $issue_id);
+		$issue = $issues_tables->selectOne($crit);
+		if($issue == null)
+		{
+			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		if (!$this->isAdmin())
+		{
+			if($activity->getUser() != Context::getUser())
+			{
+				return $this->json(["error" => "This activity doesn't belong to you."], Response::HTTP_STATUS_FORBIDDEN);
+			}
+		}
+		$this->modifyActivity($activity,$modified_activity->getIssue(),$modified_activity->getUser(),$modified_activity->getSpentMonths(),$modified_activity->getSpentWeeks(),$modified_activity->getSpentDays(),$modified_activity->getSpentHours(),$modified_activity->getSpentMinutes(),$modified_activity->getSpentPoints());
 		return $this->json(["status" => "OK"]);
 	}
 	
-	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $edited_at = null, $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null){
+	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null){
 		$modified_activity = $activity;
 		if(isset($issue_id)) $modified_activity->setIssue($issue_id);
 		if(isset($user_id)) $modified_activity->setUser($user_id);
-		if(isset($edited_at)) $modified_activity->setEditedAt($edited_at);
 		if(isset($months)) $modified_activity->setSpentMonths($months);
 		if(isset($months)) $modified_activity->setSpentWeeks($weeks);
 		if(isset($months)) $modified_activity->setSpentDays($days);
