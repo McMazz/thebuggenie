@@ -45,6 +45,14 @@ api_list_user_projects:
     parameters:
         format: json
     csrf_enabled: false
+
+api_issue_by_project:
+    route: /api/projects/:project_id/issues
+    module: api
+    action: listIssuesByProject
+    parameters:
+        format: json
+    csrf_enabled: false
   
 api_list_editions:
     route: /api/projects/:project_id/editions
@@ -138,14 +146,6 @@ api_toggle_favourite_issue:
     route: /api/issues/:issue_id/toggle-favourite
     module: api
     action: toggleFavouriteIssue
-    parameters:
-        format: json
-    csrf_enabled: false
-    
-api_issue_by_project:
-    route: /api/issues/project/:project_id/list
-    module: api
-    action: listIssuesByProject
     parameters:
         format: json
     csrf_enabled: false
