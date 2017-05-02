@@ -179,7 +179,7 @@ class Main extends Action
 		{
 			$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
 		}
-		elseif (!$is_admin && !empty(trim($request['user_id'])))
+		elseif (!$is_admin && trim($request['user_id']) != false)
 		{
 			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
 		}
@@ -225,9 +225,9 @@ class Main extends Action
 		foreach ($editions_table->select($crit) as $edition)
 		{
 			$edition_entity = entities\Edition::getB2DBTable()->selectById($edition->getID());
-			$owner = "";
-			$leader = "";
-			$qa_responsible_user = "";
+			$owner = null;
+			$leader = null;
+			$qa_responsible_user = null;
 			if($edition->getLeader() != null)
 			{
 				$leader = $edition->getLeader()->getID();
@@ -255,9 +255,9 @@ class Main extends Action
 		foreach ($components_table->select($crit) as $component)
 		{
 			$component_entity = entities\Component::getB2DBTable()->selectById($component->getID());
-			$owner = "";
-			$leader = "";
-			$qa_responsible_user = "";
+			$owner = null;
+			$leader = null;
+			$qa_responsible_user =null;
 			if($component->getLeader() != null)
 			{
 				$leader = $component->getLeader()->getID();
