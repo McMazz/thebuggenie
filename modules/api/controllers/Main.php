@@ -435,7 +435,7 @@ class Main extends Action
 			{
 				$options = $this->getListOptionsByItemType($field_key);
 			}
-			$fields[] = ["id" => intval($row->get(tables\IssueFields::ID)), "name" => $field_name, "key" => $field_key ,"required" => $required, "reportable" => $reportable, "additional" => $additional, "options" => $options];
+			$fields[] = ["id" => $row->get(tables\IssueFields::ID), "name" => $field_name, "key" => $field_key ,"required" => $required, "reportable" => $reportable, "additional" => $additional, "options" => $options];
 		}
 		return $this->json($fields);
 	}
