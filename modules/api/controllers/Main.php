@@ -3,6 +3,7 @@
 namespace thebuggenie\modules\api\controllers;
 
 use b2db\Criteria;
+use thebuggenie;
 use thebuggenie\core\entities;
 use thebuggenie\core\entities\Issue;
 use thebuggenie\core\entities\Project;
@@ -11,7 +12,6 @@ use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
-use thebuggenie;
 
 class Main extends Action
 {
@@ -120,10 +120,6 @@ class Main extends Action
 		foreach ($issues_table->select($crit) as $issue)
 		{
 			$issues[] = $issue->toJSON(false);
-		}
-		if($issues == null)
-		{
-			return $this->json(["status" => "no results or invalid project_id " . $project_id]);
 		}
 		return $this->json($issues);
 	}
@@ -282,17 +278,9 @@ class Main extends Action
 			$insert_obj = new \thebuggenie\core\modules\main\controllers\Main;
 			$insert_obj->preExecute($request,"reportIssue");
 			$insert_obj->runReportIssue($request);
-			if(!empty($insert_obj->errors))
+			if($insert_obj->issue != null)
 			{
-				return $this->json(['errors' => $insert_obj->errors], Response::HTTP_STATUS_BAD_REQUEST);
-			}
-			if(!empty($insert_obj->permission_errors))
-			{
-				return $this->json(['errors' => $insert_obj->permission_errors], Response::HTTP_STATUS_FORBIDDEN);
-			}
-			if($insert_obj->issue == NULL)
-			{
-				return $this->json(['error' => 'Something went wrong.'], 500);
+				return $this->json(['errors' => $insert_obj->errors, 'permission_errors' => $insert_obj->permission_errors], Response::HTTP_STATUS_BAD_REQUEST);
 			}
 			return $this->json($insert_obj->issue->toJSON(false));
 		}
@@ -537,8 +525,8 @@ class Main extends Action
 			$spenttime->setSpentDays($request['days']);
 			$spenttime->setSpentWeeks($request['weeks']);
 			$spenttime->setSpentMonths($request['months']);
-			$spenttime->setActivityType($request['timespent_activitytype']);
-			$spenttime->setComment($request['timespent_comment']);
+			$spenttime->setActivityType($request['activity_type_id']);
+			$spenttime->setComment($request['comment']);
 			$spenttime->save();
 			return $this->json($this->getFieldsActivityByID($spenttime->getID()));
 		}
@@ -588,7 +576,7 @@ class Main extends Action
 			}
 		}
 		$modified_activity = $this->modifyActivity($activity, $issue_id);
-		return $this->json(["status" => "OK"]);
+		return $this->json($modified_activity->toJSON(false));
 	}
 	
 	public function runModifyActivity(Request $request)
@@ -602,15 +590,6 @@ class Main extends Action
 		{
 			return $this->json(["error" => "activity_id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
-		$modified_activity = clone $activity;
-		if(isset($request['issue_id'])) $modified_activity->setIssue(trim($request['issue_id']));
-		if(isset($request['user_id'])) $modified_activity->setUser(trim($request['user_id']));
-		if(isset($request['months'])) $modified_activity->setSpentMonths(trim($request['months']));
-		if(isset($request['weeks'])) $modified_activity->setSpentWeeks(trim($request['weeks']));
-		if(isset($request['days'])) $modified_activity->setSpentDays(trim($request['days']));
-		if(isset($request['hours'])) $modified_activity->setSpentHours(trim($request['hours']));
-		if(isset($request['minutes'])) $modified_activity->setSpentMinutes(trim($request['minutes']));
-		if(isset($request['points'])) $modified_activity->setSpentPoints(trim($request['points']));
 		$issues_tables = entities\Issue::getB2DBTable();
 		$crit = $issues_tables->getCriteria();
 		$crit->addWhere(tables\Issues::ID, $issue_id);
@@ -626,20 +605,20 @@ class Main extends Action
 				return $this->json(["error" => "This activity doesn't belong to you."], Response::HTTP_STATUS_FORBIDDEN);
 			}
 		}
-		$this->modifyActivity($activity,$modified_activity->getIssue(),$modified_activity->getUser(),$modified_activity->getSpentMonths(),$modified_activity->getSpentWeeks(),$modified_activity->getSpentDays(),$modified_activity->getSpentHours(),$modified_activity->getSpentMinutes(),$modified_activity->getSpentPoints());
-		return $this->json(["status" => "OK"]);
+		$modified_activity = $this->modifyActivity($activity,$request['issue_id'],$request['user_id'],$request['months'],$request['weeks'],$request['days'],$request['hours'],$request['minutes'],$request['points']);
+		return $this->json($modified_activity->toJSON(false));
 	}
 	
 	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null){
 		$modified_activity = $activity;
-		if(isset($issue_id)) $modified_activity->setIssue($issue_id);
-		if(isset($user_id)) $modified_activity->setUser($user_id);
-		if(isset($months)) $modified_activity->setSpentMonths($months);
-		if(isset($months)) $modified_activity->setSpentWeeks($weeks);
-		if(isset($months)) $modified_activity->setSpentDays($days);
-		if(isset($months)) $modified_activity->setSpentHours($hours);
-		if(isset($months)) $modified_activity->setSpentMinutes($minutes);
-		if(isset($months)) $modified_activity->setSpentPoints($points);
+		if(isset($issue_id)) $modified_activity->setIssue(trim($issue_id));
+		if(isset($user_id)) $modified_activity->setUser(trim($user_id));
+		if(isset($months)) $modified_activity->setSpentMonths(trim($months));
+		if(isset($weeks)) $modified_activity->setSpentWeeks(trim($weeks));
+		if(isset($days)) $modified_activity->setSpentDays(trim($days));
+		if(isset($hours)) $modified_activity->setSpentHours(trim($hours));
+		if(isset($minutes)) $modified_activity->setSpentMinutes(trim($minutes));
+		if(isset($points)) $modified_activity->setSpentPoints(trim($points));
 		$modified_activity->save();
 		return $modified_activity;
 	}
@@ -660,23 +639,11 @@ class Main extends Action
 			$spent_hours = $activity->getSpentHours();
 			$spent_minutes = $activity->getSpentMinutes();
 			$spent_points = $activity->getSpentPoints();
-			$activity_type = $this->getNameActivityByID($activity->getActivityTypeID());
+			$activity_type = $activity->getActivityTypeID();
 			$comment = $activity->getComment();
-			$fields[] = ["id" => $activity_id, "user_id" => $user,"inserted" => $edited_at,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type" => $activity_type];
+			$fields[] = ["id" => $activity_id, "user_id" => $user,"inserted" => $edited_at,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type_id" => $activity_type];
 		}
 		return $fields;
-	}
-	
-	protected function getNameActivityByID($activity_id)
-	{
-		$activity_types = $this->getListOptionsByItemType("activitytype");
-		foreach ($activity_types as $activity_type) 
-		{
-			if($activity_type['id'] == $activity_id)
-			{
-				return $activity_type['name'];
-			}
-		}
 	}
 	/**
 	 *

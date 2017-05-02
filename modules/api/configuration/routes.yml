@@ -151,7 +151,7 @@ api_toggle_favourite_issue:
     csrf_enabled: false
 
 api_list_modify_activity:
-    route: /api/activities/:activity_id/modify
+    route: /api/activities/:activity_id/edit
     module: api
     action: modifyActivity
     parameters:
