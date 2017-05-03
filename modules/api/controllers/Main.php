@@ -171,18 +171,35 @@ class Main extends Action
 		$issues = [];
 		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
 		$is_admin = $this->isAdmin();
-		if ($is_admin)
+		$user_id = null;
+		if (!$is_admin && trim($request['user_name']) != false)
 		{
-			$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
+			if(entities\User::getByUsername(trim($request['user_name'])) != null){
+				$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
+				if($user_id != $current_user_id){
+					return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
+				}
+			}else{
+				return $this->json(['error' => "Could not find username:". trim($request['user_name']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
+			}
 		}
-		elseif (!$is_admin && trim($request['user_id']) != false)
+		elseif (trim($request['user_name']) != false && $is_admin)
 		{
-			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
+			if(entities\User::getByUsername(trim($request['user_name'])) != null){
+				$user_id = entities\User::getByUsername(trim($request['user_name']))->getID();
+			} else {
+				return $this->json(['error' => "Could not find username:". trim($request['user_name']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
+			}
 		}
 		else
 		{
 			$user_id = $current_user_id;
 		}
+		
+		if($user_id == null){
+			return $this->json(['error' => "Could not find username:". trim($request['user_name']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		
 		$date_from = trim($request['date_from']);
 		$date_to = trim($request['date_to']);
 		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
