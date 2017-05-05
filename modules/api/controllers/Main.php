@@ -549,20 +549,31 @@ class Main extends Action
 		}
 		else{
 			$activities = [];
-			$activities_id = [];
 			$time_spent_table = entities\IssueSpentTime::getB2DBTable();
 			$crit = $time_spent_table->getCriteria();
 			$crit->addWhere(tables\IssueSpentTimes::ISSUE_ID, $issue_id);
 			foreach ($time_spent_table->select($crit) as $issue)
 			{
-				$activities_id[] = $issue->getID();
-			}
-			foreach ($activities_id as $activity_id)
-			{
-				$activities[] = $this->getFieldsActivityByID($activity_id);
+				$activities[] = $this->getFieldsActivityByID($issue->getID());
 			}
 			return $this->json($activities);
 		}
+	}
+	
+	public function runListActivities(Request $request) {
+		$date_from = trim($request['date_from']);
+		$date_to = trim($request['date_to']);
+		$activities = [];
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_BY, $this->getUser()->getID());
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_from, $crit::DB_GREATER_THAN_EQUAL);
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_to, $crit::DB_LESS_THAN_EQUAL);
+		foreach ($time_spent_table->select($crit) as $activity)
+		{
+			$activities[] = $this->getFieldsActivityByID($activity->getID());
+		}
+		return $this->json($activities);
 	}
 	
 	public function runMoveActivity(Request $request){

@@ -134,6 +134,14 @@ api_list_starred_issues:
         format: json
     csrf_enabled: false
 
+api_list_user_activities:
+    route: /api/activities
+    module: api
+    action: listActivities
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_list_activities_by_issue:
     route: /api/issues/:issue_id/activities
     module: api
