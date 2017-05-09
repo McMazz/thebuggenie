@@ -483,7 +483,9 @@ class Main extends Action
 	{
 		$starred_issues = [];
 		$user = $this->getUser();
-		foreach ($user->getStarredIssues() as $starred_issue)
+		$starredissues = \thebuggenie\core\entities\tables\UserIssues::getTable()->getUserStarredIssues($user->getID());
+                ksort($starredissues, SORT_NUMERIC);
+		foreach ($starredissues as $starred_issue)
 		{
 			$starred_issues[] = entities\Issue::getB2DBTable()->selectById($starred_issue)->toJSON(false);
 		}
