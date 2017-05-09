@@ -1192,17 +1192,6 @@
                 ksort($this->_starredissues, SORT_NUMERIC);
             }
         }
-        
-        /**
-         * Returns an array of issues starred by the user
-         * 
-         * @return array|UserIssues
-         */
-        public function getStarredIssues()
-        {
-        	$this->_populateStarredIssues();
-        	return $this->_starredissues;
-        }
 
         /**
          * Returns whether or not an issue is starred
