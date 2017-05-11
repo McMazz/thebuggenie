@@ -545,6 +545,7 @@ class Main extends Action
 			$spenttime->setSpentWeeks($request['weeks']);
 			$spenttime->setSpentMonths($request['months']);
 			$spenttime->setActivityType($request['activity_type_id']);
+			$spenttime->setActivityType($request['inserted']);
 			$spenttime->setComment($request['comment']);
 			$spenttime->save();
 			return $this->json($this->getFieldsActivityByID($spenttime->getID()));
