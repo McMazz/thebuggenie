@@ -38,7 +38,10 @@ class Main extends Action
 					'message' => Settings::getMaintenanceMessage() ?: 'Maintenance mode enabled'
 			], 500);
 		}
-		return $this->json(['status' => 'OK']);
+		return $this->json([
+			'status' => 'OK',
+			'message' => 'The Server is fully functional'
+		]);
 	}
 
 	public function runAuth(Request $request)
@@ -77,24 +80,44 @@ class Main extends Action
 		{
 			$limit = 5;
 		}
-		foreach($this->getUser()->getAssociatedProjects() as $project)
+		$includeClosed = $request['includeClosed'];
+		if($includeClosed == null){
+			$includeClosed = false;
+		}else{
+			$includeClosed = $includeClosed === 'true'? true: false;
+		}
+		if ($limit == 0)
 		{
-			foreach($project->getRecentActivities($limit,false,null,true) as $activities)
-			{
-				foreach ($activities as $activity)
-				{
-					if(!in_array($activity["target"], $issues_ids))
-					{
-						$issues_ids[] = $activity["target"];
-					}
-				}
+			$limit = 5;
+		}
+		$activities = [];
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_BY, $this->getUser()->getID());
+		$crit->addOrderBy(tables\IssueSpentTimes::EDITED_AT, Criteria::SORT_DESC);
+		$distinctIssueIdFound = 0;
+		$distinctIssueIds = [];
+		$activityIDs = [];
+		foreach ($time_spent_table->select($crit) as $activity)
+		{
+			if(!in_array($activity->getIssueID(), $distinctIssueIds)){
+				$distinctIssueIds[] = $activity->getIssueID();
+				$activityIDs[] = [$activity->getEditedAt() => $activity->getID()];
+				$distinctIssueIdFound++;
+			}
+			if ($distinctIssueIdFound >= $limit){
+				break;
 			}
 		}
-		foreach ($issues_ids as $issue)
-		{
-			$issues_JSON[] = entities\Issue::getB2DBTable()->selectById($issue)->toJSON(false);
+		ksort($activityIDs);
+		foreach ($activityIDs as $activityID){
+			$values = $this->getFieldsIssueByActivityID($activityID, $includeClosed);
+			if($values != null){
+				$activities[] = $values;
+			}
 		}
-		return $this->json($issues_JSON);
+			
+		return $this->json($activities);
 	}
 	
 	public function runListIssuesByProject(Request $request)
@@ -134,12 +157,12 @@ class Main extends Action
 		return $this->json($teams);
 	}
 
-	public function runListProjects(Request $request)
+	public function runListUserProjects(Request $request)
 	{
 		$projects = [];
 		foreach ($this->getUser()->getAssociatedProjects() as $project)
 		{
-			if ($project->isDeleted()) continue;
+ 			if ($project->isDeleted()) continue;
 			$projects[] = $project->toJSON(false);
 		}
 		return $this->json($projects);
@@ -175,6 +198,7 @@ class Main extends Action
 		{
 			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
 		}
+		$userSpentTimeTable = [];
 		$date_from = trim($request['date_from']);
 		$date_to = trim($request['date_to']);
 		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
@@ -183,10 +207,31 @@ class Main extends Action
 		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_to, $crit::DB_LESS_THAN_EQUAL);
 		foreach ($time_spent_table->select($crit) as $activity)
 		{
-			$time_spent_data = tables\IssueSpentTimes::getTable()->getSpentTimeSumsByIssueId($activity->getIssueID());
-			$issues[] = ["id" => $activity->getIssueID(),"username" => $activity->getUser()->getUsername(),"points" => $time_spent_data['points'],"hours" => intval($time_spent_data['hours']),"minutes" =>  $time_spent_data['minutes']];
-		}
+			$issue = $this->getIssueByID($activity->getIssueID());
+			$activity_type_id = $activity->getActivityTypeID();
+			if($activity_type_id != 0){
+				$listTypeTable = entities\tables\ListTypes::getTable();
+				$crit3 = $listTypeTable->getCriteria();
+				$crit3->addWhere(entities\tables\ListTypes::ID, $activity_type_id);
+				$crit3->
+				$result = $listTypeTable->selectOne($crit3);
+				$activity_type_desc = $result->getName();
+			}else{
+				$activity_type_id = 0;
+				$activity_type_desc = "";
+			}
+			$issues[] = ["id" => $activity->getID(),"issue_id" => $activity->getIssueID(),"issue_no" => $issue->getFormattedIssueNo() ,"href" => $this->getIssueHrefByID($activity->getIssueID()),"username" => $activity->getUser()->getUsername(),"spent_points" => $activity->getSpentPoints(),"spent_months" => $activity->getSpentMonths(),"spent_weeks" => $activity->getSpentWeeks(),"spent_days" => $activity->getSpentDays(),"spent_hours" => $activity->getSpentHours(),"spent_minutes" =>  $activity->getSpentMinutes(),"comment" => $activity->getComment(), "inserted" => $activity->getEditedAt(), "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+	}
 		return $this->json($issues);
+	}
+	
+	public function runListProjects(Request $request){
+		$projects = [];
+		foreach (entities\Project::getAll() as $project){
+			
+			$projects[] = $project->toJSON(false);
+		}
+		return $this->json($projects);
 	}
 	
 	public function runListOptionsByCustomItemType(Request $request)
@@ -278,23 +323,23 @@ class Main extends Action
 		else
 		{
 			$text = trim($request['search']);
-			$limit = intval($request['paginate']);
+			$limit = intval($request['limit']);
 			$offset = intval($request['page']);
-			if($limit == 0)
-			{
-				$limit = 10;
-			}
 			if($offset != 0)
 			{
 				$offset -= 1;
 				$offset *= $limit;
 			}
-			$filters = ['text' => entities\SearchFilter::createFilter('text', ['v' => $text, 'o' => '='])];
-			$issues = entities\Issue::findIssues($filters, $limit, $offset);
+			$counter = 0;
+			$issues= entities\Issue::findIssuesByText($text);
 			$ret_issues = [];
 			foreach ($issues[0] as $issue)
 			{
 				$ret_issues[] = $issue->toJSON(false);
+				$counter++;
+				if($limit != 0 && $counter == $limit){
+					break;
+				}
 			}
 			return $this->json($ret_issues);
 		}
@@ -428,6 +473,15 @@ class Main extends Action
 		}
 		return $options;
 	}
+
+	protected function getNames($item_type)
+	{
+		foreach (entities\tables\ListTypes::getTable()->getAllByItemType($item_type) as $option)
+		{
+			$options[] = $option->getName();
+		}
+		return $options;
+	}
 	
 	protected function getListOptionsByCustomItemType($item_type)
 	{
@@ -459,9 +513,12 @@ class Main extends Action
 		$user = $this->getUser();
 		$starredissues = \thebuggenie\core\entities\tables\UserIssues::getTable()->getUserStarredIssues($user->getID());
                 ksort($starredissues, SORT_NUMERIC);
-		foreach ($starredissues as $starred_issue)
+		foreach ($starredissues as $starred_issue_id)
 		{
-			$starred_issues[] = entities\Issue::getB2DBTable()->selectById($starred_issue)->toJSON(false);
+			$starred_issue = entities\Issue::getB2DBTable()->selectById($starred_issue_id);
+			if(!$starred_issue->isClosed()){
+				$starred_issues[] = entities\Issue::getB2DBTable()->selectById($starred_issue_id)->toJSON(false);
+			}
 		}
 		return $this->json($starred_issues);
 	}
@@ -623,6 +680,30 @@ class Main extends Action
 	
 	public function runMoveActivity(Request $request){
 		$issue_id = trim($request['issue_id']);
+		if (!isset($request['issue_id'])) return $this->json(["error" => "issue_id required"], Response::HTTP_STATUS_BAD_REQUEST);
+		$activity_id = trim($request['activity_id']);
+		$activity_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $activity_table->getCriteria();
+		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
+		$activity = $activity_table->selectOne($crit);
+		if($activity == null)
+		{
+			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$issues_tables = entities\Issue::getB2DBTable();
+		$crit = $issues_tables->getCriteria();
+		$crit->addWhere(tables\Issues::ID, $issue_id);
+		$issue = $issues_tables->selectOne($crit);
+		if($issue == null)
+		{
+			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		$modified_activity = $this->modifyActivity($activity, $issue_id);
+		return $this->json($modified_activity->toJSON(false));
+	}
+	
+	public function runDeleteActivity(Request $request){
+		$issue_id = trim($request['issue_id']);
 		if (isset($request['issue_id'])) return $this->json(["error" => "issue_id required"], Response::HTTP_STATUS_BAD_REQUEST);
 		$activity_id = trim($request['activity_id']);
 		$activity_table = entities\IssueSpentTime::getB2DBTable();
@@ -633,29 +714,15 @@ class Main extends Action
 		{
 			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
-		$issues_tables = entities\Issue::getB2DBTable();
-		$crit = $issues_tables->getCriteria();
-		$crit->addWhere(tables\Issues::ID, $issue_id);
-		$issue = $issues_tables->selectOne($crit);
-		if($issue == null)
-		{
-			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
-		}
-		if (!$this->isAdmin())
-		{
-			if($activity->getUser() != Context::getUser())
-			{
-				return $this->json(["error" => "This activity doesn't belong to you."], Response::HTTP_STATUS_FORBIDDEN);
-			}
-		}
-		$modified_activity = $this->modifyActivity($activity, $issue_id);
-		return $this->json($modified_activity->toJSON(false));
+		$crit = $activity_table->getCriteria();
+		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
+		$activity_table->doDelete($crit);
+		return $this->json(["message" => "success"]);
 	}
 	
 	public function runModifyActivity(Request $request)
 	{
 		$activity_id = trim($request['activity_id']);
-		$issue_id = trim($request['issue_id']);
 		$activity_table = entities\IssueSpentTime::getB2DBTable();
 		$crit = $activity_table->getCriteria();
 		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
@@ -663,21 +730,6 @@ class Main extends Action
 		if($activity == null)
 		{
 			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
-		}
-		$issues_tables = entities\Issue::getB2DBTable();
-		$crit = $issues_tables->getCriteria();
-		$crit->addWhere(tables\Issues::ID, $issue_id);
-		$issue = $issues_tables->selectOne($crit);
-		if($issue == null)
-		{
-			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
-		}
-		if (!$this->isAdmin())
-		{
-			if($activity->getUser() != Context::getUser())
-			{
-				return $this->json(["error" => "This activity doesn't belong to you."], Response::HTTP_STATUS_FORBIDDEN);
-			}
 		}
 		if (isset($request['username'])){
 			if(entities\User::getByUsername(trim($request['username'])) != null)
@@ -691,11 +743,11 @@ class Main extends Action
 			return $this->json(['error' => "Please provide a username"], Response::HTTP_STATUS_BAD_REQUEST);
 				
 		}
-		$modified_activity = $this->modifyActivity($activity,$issue->getID(),$user_id,$request['spentMonths'],$request['spentWeeks'],$request['spendDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment']);
+		$modified_activity = $this->modifyActivity($activity,$request['issueId'],$user_id,$request['spentMonths'],$request['spentWeeks'],$request['spentDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment'],$request['activity_type_id'],$request['inserted']);
 		return $this->json($modified_activity->toJSON(false));
 	}
 	
-	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null,$comment = null){
+	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null,$comment = null,$activity_type_id = null,$inserted = null){
 		$modified_activity = $activity;
 		if(isset($issue_id)) $modified_activity->setIssue(trim($issue_id));
 		if(isset($user_id)) $modified_activity->setUser(trim($user_id));
@@ -706,6 +758,10 @@ class Main extends Action
 		if(isset($minutes)) $modified_activity->setSpentMinutes(trim($minutes));
 		if(isset($points)) $modified_activity->setSpentPoints(trim($points));
 		if(isset($comment)) $modified_activity->setComment(trim($comment));
+		if(isset($activity_type_id)){
+			$modified_activity->setActivityType(trim($activity_type_id));
+		}
+		if(isset($inserted)) $modified_activity->setEditedAt(trim($inserted));
 		$modified_activity->save();
 		return $modified_activity;
 	}
@@ -719,6 +775,10 @@ class Main extends Action
 		$edited_at = $activity->getEditedAt();
 		$user =  $activity->getUser()->getUsername();
 		$issue_id = $activity->getIssueID();
+		$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+		$issue_no = $issue->getFormattedIssueNo();
+		$project_key = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getKey();
+		$href =  Context::getRouting()->generate('viewissue', ['project_key' => $project_key, 'issue_no' => $issue_no ], false);
 		$spent_months = $activity->getSpentMonths();
 		$spent_weeks = $activity->getSpentWeeks();
 		$spent_days = $activity->getSpentDays();
@@ -737,7 +797,25 @@ class Main extends Action
 			$activity_type_desc = "";
 		}
 		$comment = $activity->getComment();
-		$fields = ["id" => $activity_id, "username" => $user,"inserted" => $edited_at,"issue_id" => $issue_id,"issue_no" => $this->getIssueNoParsed($issue_id), "spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+		$fields = ["id" => $activity_id, "username" => $user,"inserted" => $edited_at,"issue_id" => $issue_id,"issue_no" => $issue_no,"href" => $href ,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+		return $fields;
+	}
+	
+	protected function getFieldsIssueByActivityID($activity_id, $includeClosed = false)
+	{
+		$activities_table = tables\IssueSpentTimes::getTable();
+		$crit2 = $activities_table->getCriteria();
+		$crit2->addWhere(tables\IssueSpentTimes::ID, $activity_id);
+		$activity = $activities_table->selectOne($crit2);
+		$issue_id = $activity->getIssueID();
+		$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+		if ($issue->isClosed() && !$includeClosed){
+			return null;
+		}
+		$issue_no = $issue->getFormattedIssueNo();
+		$project_key = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getKey();
+		$href =  Context::getRouting()->generate('viewissue', ['project_key' => $project_key, 'issue_no' => $issue_no ], false);
+		$fields = ["id" => $issue_id,"title" => $issue->getTitle(),"issue_no" => $issue_no,"href" => $href];
 		return $fields;
 	}
 	/**
@@ -792,11 +870,15 @@ class Main extends Action
 		return entities\ApplicationPassword::createToken($visible_password);
 	}
 	
-	protected function getIssueNoParsed($issue_id){
-		$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
-		$issue_No = $issue->getIssueNo();
-		$project_prefix = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getPrefix();
-		return $project_prefix . "-" . $issue_No;
+	protected function getIssueByID($issue_id){
+		return entities\Issue::getB2DBTable()->selectById($issue_id);
+	}
+	
+	protected function getIssueHrefByID($issue_id){
+		$issue = $this->getIssueByID($issue_id);
+		$issue_no = $issue->getFormattedIssueNo();
+		$project_key = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getKey();
+		return Context::getRouting()->generate('viewissue', ['project_key' => $project_key, 'issue_no' => $issue_no ], false);
 	}
 	
 }

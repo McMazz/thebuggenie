@@ -39,6 +39,14 @@ api_activity_types:
     csrf_enabled: false
 
 api_list_user_projects:
+    route: /api/userprojects
+    module: api
+    action: listUserProjects
+    parameters:
+        format: json
+    csrf_enabled: false
+
+api_list_projects:
     route: /api/projects
     module: api
     action: listProjects
@@ -170,6 +178,14 @@ api_list_move_activity:
     route: /api/activities/:activity_id/move
     module: api
     action: moveActivity
+    parameters:
+        format: json
+    csrf_enabled: false
+
+api_list_delete_activity:
+    route: /api/activities/:activity_id/delete
+    module: api
+    action: deleteActivity
     parameters:
         format: json
     csrf_enabled: false
