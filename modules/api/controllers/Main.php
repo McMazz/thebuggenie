@@ -410,58 +410,26 @@ class Main extends Action
 	
 	public function runListIssueTypes(Request $request)
 	{
-		$issue_types = [];
-		$project_id = trim($request['project_id']);
-		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issue_type)
-		{
-			$issue_types[] = $issue_type->toJSON(false);
-		}
-		return $this->json($issue_types);
+ 		$issue_types = [];
+ 		$project_id = trim($request['project_id']);
+ 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+ 		foreach ($project->getIssueTypeScheme()->getIssuetypes() as $issue_type)
+ 		{
+ 			$issue_types[] = $issue_type->toJSON(false);
+ 		}
+ 		return $this->json($issue_types);
 	}
 	
 	public function runListFieldsByIssueType(Request $request)
 	{
-		$fields = [];
-		$i18n = Context::getI18n();
 		$project_id = trim($request['project_id']);
-		$issue_type = intval($request['issue_type']);
 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-		$issue_type_scheme_id = $project->getIssuetypeScheme()->getID();
-		$rows =  tables\IssueFields::getTable()->getBySchemeIDandIssuetypeID($issue_type_scheme_id,$issue_type);
-		$custom_fields = tables\CustomFields::getTable()->getAll();
-		$custom_fields_keys = [];
-		foreach ($custom_fields as $field)
-		{
-			$custom_fields_keys[] = strtolower($field->getName());
-		}
-		while ($row = $rows->getNextRow())
-		{
-			$field_key = $row->get(tables\IssueFields::FIELD_KEY);
-			$is_custom = false;
-			$field_name;
-			if(!in_array($field_key, $custom_fields_keys))
-			{
-				$field_name = str_replace("_", " ", ucfirst($field_key));
-				$field_name = $i18n->__($field_name);
-			}else
-			{
-				$field_name = $custom_fields[$field_key]->getName();
-				$is_custom = true;
-			}
-			$required = $this->stringToBoolean($row->get(tables\IssueFields::REQUIRED));
-			$reportable = $this->stringToBoolean($row->get(tables\IssueFields::REPORTABLE));
-			$additional = $this->stringToBoolean($row->get(tables\IssueFields::ADDITIONAL));
-			if($is_custom)
-			{
-				$options = $this->getListOptionsByCustomItemType($field_key);
-			}else
-			{
-				$options = $this->getListOptionsByItemType($field_key);
-			}
-			$fields[] = ["id" => $row->get(tables\IssueFields::ID), "name" => $field_name, "key" => $field_key ,"required" => $required, "reportable" => $reportable, "additional" => $additional, "options" => $options];
-		}
-		return $this->json($fields);
+		$fields_array = $project->getReportableFieldsArray($request['issue_type'], true);
+		$available_fields = entities\DatatypeBase::getAvailableFields();
+		$available_fields[] = 'pain_bug_type';
+		$available_fields[] = 'pain_likelihood';
+		$available_fields[] = 'pain_effect';
+		return $this->json(['available_fields' => $available_fields, 'fields' => $fields_array]);
 	}
 	
 	protected function getListOptionsByItemType($item_type)
