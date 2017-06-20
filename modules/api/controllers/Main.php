@@ -716,6 +716,46 @@ class Main extends Action
 		return $this->json($modified_activity->toJSON(false));
 	}
 	
+	public function runListActivitiesByProjects(Request $request)
+	{
+		$dateFrom = intval($request['date_from']);
+		$dateTo = intval($request['date_to']);
+		
+		$prefix = \b2db\Core::getTablePrefix();
+		$editedBy = $prefix . tables\IssueSpentTimes::EDITED_BY;
+		$projectId = $prefix . tables\Issues::PROJECT_ID;
+		$issueId = $prefix . tables\IssueSpentTimes::ISSUE_ID;
+		$id = $prefix . tables\Issues::ID;
+		$spentMonths = $prefix . tables\IssueSpentTimes::SPENT_MONTHS;
+		$spentWeeks = $prefix . tables\IssueSpentTimes::SPENT_WEEKS;
+		$spentDays = $prefix . tables\IssueSpentTimes::SPENT_DAYS;
+		$spentHours = $prefix . tables\IssueSpentTimes::SPENT_HOURS;
+		$spentMinutes = $prefix . tables\IssueSpentTimes::SPENT_MINUTES;
+		$editedAt = $prefix . tables\IssueSpentTimes::EDITED_AT;
+		$spentTimeTable = $prefix . tables\IssueSpentTimes::getTable()->getB2DBName();
+		$issueTable = $prefix . tables\Issues::getTable()->getB2DBName();
+		$sql = "SELECT $editedBy AS user_id, $projectId AS project_id, SUM($spentMonths) AS months, SUM($spentWeeks) AS weeks, SUM($spentDays) AS days, SUM($spentHours) AS hours, SUM($spentMinutes) AS minutes FROM $spentTimeTable JOIN $issueTable ON $issueId = $id WHERE $editedAt >= ? AND $editedAt <= ? GROUP BY user_id, project_id ORDER BY user_id, project_id";
+		$statement = \b2db\Statement::getPreparedStatement($sql);
+		$statement->statement->execute([$dateFrom, $dateTo]);
+		$result = [];
+		while($row = $statement->fetch()) {
+			$user_id = $row['user_id'];
+			$project_id = $row['project_id'];
+			$months = intval($row['months']);
+			$weeks = intval($row['weeks']);
+			$days = intval($row['days']);
+			$hours = intval($row['hours']);
+			$minutes = intval($row['minutes']);
+			$weeks += $months * 4;
+			$days += $weeks * 5;
+			$hours += $days * 8;
+			$hours += floor($hours / 60);
+			$minutes %= 60;
+			$result[] = compact('user_id', 'project_id', 'hours', 'minutes');
+		}
+		return $this->json($result);
+	}
+	
 	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null,$comment = null,$activity_type_id = null,$inserted = null){
 		$modified_activity = $activity;
 		if(isset($issue_id)) $modified_activity->setIssue(trim($issue_id));

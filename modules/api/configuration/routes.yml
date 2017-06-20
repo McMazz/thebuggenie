@@ -94,6 +94,14 @@ api_list_fields_by_issuetypes:
         format: json
     csrf_enabled: false
 
+api_list_activities_by_projects:
+    route: /api/projects/activities
+    module: api
+    action: listActivitiesByProjects
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_issues:
     route: /api/issues
     module: api
