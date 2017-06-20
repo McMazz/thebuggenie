@@ -160,10 +160,11 @@ class Main extends Action
 	public function runListUserProjects(Request $request)
 	{
 		$projects = [];
-		foreach ($this->getUser()->getAssociatedProjects() as $project)
+		$p = entities\Project::getAllRootProjects(false);
+		foreach ($p as $project)
 		{
- 			if ($project->isDeleted()) continue;
-			$projects[] = $project->toJSON(false);
+			if ($project->hasAccess($this->getUser()))
+				$projects[] = $project->toJSON(false);
 		}
 		return $this->json($projects);
 	}
