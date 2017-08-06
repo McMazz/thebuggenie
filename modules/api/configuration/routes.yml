@@ -61,6 +61,7 @@ api_issue_by_project:
     parameters:
         format: json
     csrf_enabled: false
+    
   
 api_list_editions:
     route: /api/projects/:project_id/editions
@@ -93,6 +94,7 @@ api_list_fields_by_issuetypes:
     parameters:
         format: json
     csrf_enabled: false
+    
 
 api_list_activities_by_projects:
     route: /api/projects/activities
@@ -154,6 +156,14 @@ api_list_user_activities:
     route: /api/activities
     module: api
     action: listActivities
+    parameters:
+        format: json
+    csrf_enabled: false
+
+api_issue_by_id:
+    route: /api/issues/:issue_id/getIssue
+    module: api
+    action: getIssueByID
     parameters:
         format: json
     csrf_enabled: false

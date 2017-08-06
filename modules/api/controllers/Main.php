@@ -12,6 +12,7 @@ use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
+use thebuggenie\core\entities\tables\CustomFieldOptions;
 
 class Main extends Action
 {
@@ -194,12 +195,6 @@ class Main extends Action
 	{
 		$issues = [];
 		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
-		$is_admin = $this->isAdmin();
-		if (!$is_admin)
-		{
-			return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
-		}
-		$userSpentTimeTable = [];
 		$date_from = trim($request['date_from']);
 		$date_to = trim($request['date_to']);
 		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
@@ -214,7 +209,6 @@ class Main extends Action
 				$listTypeTable = entities\tables\ListTypes::getTable();
 				$crit3 = $listTypeTable->getCriteria();
 				$crit3->addWhere(entities\tables\ListTypes::ID, $activity_type_id);
-				$crit3->
 				$result = $listTypeTable->selectOne($crit3);
 				$activity_type_desc = $result->getName();
 			}else{
@@ -222,7 +216,7 @@ class Main extends Action
 				$activity_type_desc = "";
 			}
 			$issues[] = ["id" => $activity->getID(),"issue_id" => $activity->getIssueID(),"issue_no" => $issue->getFormattedIssueNo() ,"href" => $this->getIssueHrefByID($activity->getIssueID()),"username" => $activity->getUser()->getUsername(),"spent_points" => $activity->getSpentPoints(),"spent_months" => $activity->getSpentMonths(),"spent_weeks" => $activity->getSpentWeeks(),"spent_days" => $activity->getSpentDays(),"spent_hours" => $activity->getSpentHours(),"spent_minutes" =>  $activity->getSpentMinutes(),"comment" => $activity->getComment(), "inserted" => $activity->getEditedAt(), "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
-	}
+		}
 		return $this->json($issues);
 	}
 	
@@ -315,10 +309,6 @@ class Main extends Action
 			$insert_obj = new \thebuggenie\core\modules\main\controllers\Main;
 			$insert_obj->preExecute($request,"reportIssue");
 			$insert_obj->runReportIssue($request);
-			if($insert_obj->issue != null)
-			{
-				return $this->json(['errors' => $insert_obj->errors, 'permission_errors' => $insert_obj->permission_errors], Response::HTTP_STATUS_BAD_REQUEST);
-			}
 			return $this->json($insert_obj->issue->toJSON(false));
 		}
 		else
@@ -421,16 +411,138 @@ class Main extends Action
  		return $this->json($issue_types);
 	}
 	
+// 	public function runListFieldsByIssueTypeMartelli(Request $request)
+// 	{
+// 		$project_id = trim($request['project_id']);
+// 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+// 		$fields_array = $project->getReportableFieldsArray($request['issue_type'], true);
+// 		foreach ($fields_array as $key => $value){
+// 			if(isset($value['custom'])){
+// 				if ($value['custom'] == true){
+// 					$fields_array[$key]['description'] = $this->getFieldDescription($key);
+// 				}
+// 			}else{
+// 				$i18n = Context::getI18n();
+// 				$fields_array[$key]['description'] = $i18n->__($key);
+// 			}
+// 		}
+// 		$available_fields = entities\DatatypeBase::getAvailableFields();
+// 		$available_fields[] = 'pain_bug_type';
+// 		$available_fields[] = 'pain_likelihood';
+// 		$available_fields[] = 'pain_effect';
+		
+// 		return $this->json(['available_fields' => $available_fields ,'fields' => $fields_array]);
+// 	}
+	
 	public function runListFieldsByIssueType(Request $request)
 	{
+		$fields = [];
+		$i18n = Context::getI18n();
 		$project_id = trim($request['project_id']);
+		$issue_type = intval($request['issue_type']);
 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-		$fields_array = $project->getReportableFieldsArray($request['issue_type'], true);
-		$available_fields = entities\DatatypeBase::getAvailableFields();
-		$available_fields[] = 'pain_bug_type';
-		$available_fields[] = 'pain_likelihood';
-		$available_fields[] = 'pain_effect';
-		return $this->json(['available_fields' => $available_fields, 'fields' => $fields_array]);
+		$issue_type_scheme_id = $project->getIssuetypeScheme()->getID();
+		$rows =  tables\IssueFields::getTable()->getBySchemeIDandIssuetypeID($issue_type_scheme_id,$issue_type);
+		$custom_fields = tables\CustomFields::getTable()->getAll();
+		$custom_fields_keys = [];
+		foreach ($custom_fields as $field)
+		{
+			$custom_fields_keys[] = strtolower($field->getName());
+		}
+		if($rows != null){
+			while ($row = $rows->getNextRow())
+			{
+				$field_key = $row->get(tables\IssueFields::FIELD_KEY);
+				$is_custom = false;
+				$field_name;
+				if(!in_array(strtolower($field_key), $custom_fields_keys))
+				{
+					$field_name = str_replace("_", " ", ucfirst($field_key));
+					$field_name = $i18n->__($field_name);
+				}else
+				{
+	 				$field_name = $custom_fields[$field_key]->getName();
+					$field_name = $this->getFieldDescription($field_key);;
+					$is_custom = true;
+				}
+				$required = $this->stringToBoolean($row->get(tables\IssueFields::REQUIRED));
+				$reportable = $this->stringToBoolean($row->get(tables\IssueFields::REPORTABLE));
+				$additional = $this->stringToBoolean($row->get(tables\IssueFields::ADDITIONAL));
+				$option_values = [];
+				
+				if($is_custom)
+				{
+					$options = $this->getListOptionsByCustomItemType($field_key);
+					$dataTypeDescription = entities\CustomDatatype::getByKey($field_key)->getTypeDescription();
+					$dataType = entities\CustomDatatype::getByKey($field_key)->getType();
+				}else
+				{
+					$options = $this->getListOptionsByItemType($field_key);
+					$dataTypes = entities\Datatype::getTypes();
+				}
+				if($additional && $options == []){
+					$options = $this->getListOptionsAdditionalItem($project_id, $issue_type,$field_key);
+					$options = $this->removeUnnecessaryAdditionlItemOptions($options);
+				}
+				
+				if($options == []){
+					$options = $this->getListOptionsAdditionalItem($project_id, $issue_type,$field_key);
+					$options = $this->removeUnnecessaryAdditionlItemOptions($options);
+				}
+				
+				foreach ($options as $option){
+					$option_values[$option['id']] = $option['name'];
+				}
+				
+				if ($reportable){
+					if($is_custom){
+						if($option_values == []){
+							$obj = ["id" => $row->get(tables\IssueFields::ID), "description" => $field_name, "name" => $field_key ,"required" => $required, "additional" => $additional, "custom" => $is_custom, "field_type_description" => $dataTypeDescription, "field_type_id" => $dataType];
+						}else{
+							$obj = ["id" => $row->get(tables\IssueFields::ID), "description" => $field_name, "name" => $field_key ,"required" => $required, "additional" => $additional, "values" => $option_values, "custom" => $is_custom, "field_type_description" => $dataTypeDescription, "field_type_id" => $dataType];
+						}
+					}else{
+						if($option_values == []){
+							$obj = ["id" => $row->get(tables\IssueFields::ID), "description" => $field_name, "name" => $field_key ,"required" => $required, "additional" => $additional, "custom" => $is_custom];
+						}else{
+							$obj = ["id" => $row->get(tables\IssueFields::ID), "description" => $field_name, "name" => $field_key ,"required" => $required, "additional" => $additional, "values" => $option_values, "custom" => $is_custom];
+						}
+					}
+					
+					
+					$fields[$field_key] =  $obj;
+				}
+			}
+		}
+		return $this->json(["fields" => $fields]);
+	}
+	
+	protected function getListOptionsAdditionalItem($project_id, $issue_type, $item_type)
+	{
+		$options = [];
+		$project = entities\Project::getB2DBTable()->selectByID($project_id);
+		$fields_array = $project->getReportableFieldsArray($issue_type, true);
+		if(isset($fields_array[$item_type])){
+			if(isset($fields_array[$item_type]['values'])){
+				$options = $fields_array[$item_type]['values'];
+			}
+		}
+		
+		return $options;
+	}
+	
+	protected function removeUnnecessaryAdditionlItemOptions($options)
+	{
+		$cleaned_options = [];
+		foreach ($options as $key => $value){
+			if(strtoupper($options[$key]) != "NONE"){
+				if (strpos($key, 'v') !== false) {
+					$id = str_replace('v', '', $key);
+					$cleaned_options[] = array('id' => $id, 'name' => $options[$key]);
+				}
+			}
+		}
+		return $cleaned_options;
 	}
 	
 	protected function getListOptionsByItemType($item_type)
@@ -452,18 +564,17 @@ class Main extends Action
 		return $options;
 	}
 	
+	protected function getFieldDescription($key)
+	{
+		return entities\tables\CustomFields::getTable()->getByKey($key)[entities\tables\CustomFields::FIELD_DESCRIPTION];
+	}
+	
 	protected function getListOptionsByCustomItemType($item_type)
 	{
 		$options = [];
-		$custom_fields = tables\CustomFields::getTable()->getAll();
-		$custom_fields_ids = [];
-		foreach ($custom_fields as $custom_field)
-		{
-			$custom_fields_ids[$custom_field->getKey()] = $custom_field->getItemType();
-		}
 		$custom_fields_options_table = tables\CustomFieldOptions::getTable();
 		$crit = $custom_fields_options_table->getCriteria();
-		$crit->addWhere(tables\CustomFieldOptions::CUSTOMFIELD_ID, $custom_fields_ids[$item_type]);
+		$crit->addWhere("customfieldoptions.key", $item_type);
 		foreach ($custom_fields_options_table->select($crit) as $option)
 		{
 			$options[] = $option->toJSON(false);
@@ -535,14 +646,12 @@ class Main extends Action
 		if($request->isPost())
 		{
 			$spenttime = new \thebuggenie\core\entities\IssueSpentTime();
-			$spenttime->setIssue($issue_id);
+			$issue = $this->getIssueByID($issue_id);
+			$spenttime->setIssue($issue);
 			if (isset($request['username'])){
 				if(entities\User::getByUsername(trim($request['username'])) != null){
-					$user_id = entities\User::getByUsername(trim($request['username']))->getID();
-					if($user_id != $this->getUser()->getID() && !$this->isAdmin()){
-						return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
-					}
-					$spenttime->setUser($user_id);
+					$user = entities\User::getByUsername(trim($request['username']));
+					$spenttime->setUser($user);
 				}else{
 					return $this->json(['error' => "Could not find username:". trim($request['username']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
 				}
@@ -559,6 +668,7 @@ class Main extends Action
 			$spenttime->setEditedAt($request['inserted']);
 			$spenttime->setComment($request['comment']);
 			$spenttime->save();
+			$spenttime->getIssue()->saveSpentTime();
 			return $this->json($this->getFieldsActivityByID($spenttime->getID()));
 		}
 		else{
@@ -569,9 +679,6 @@ class Main extends Action
 			if (isset($request['username'])){
 				if(entities\User::getByUsername(trim($request['username'])) != null){
 					$user_id = entities\User::getByUsername(trim($request['username']))->getID();
-					if($user_id != $this->getUser()->getID() && !$this->isAdmin()){
-						return $this->json(['error' => "You don't have administrative privileges."], Response::HTTP_STATUS_FORBIDDEN);
-					}
 					$crit->addWhere(tables\IssueSpentTimes::EDITED_BY, $user_id);
 				}else{
 					return $this->json(['error' => "Could not find username:". trim($request['username']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
@@ -616,6 +723,7 @@ class Main extends Action
 			return $this->json($activities);
 		}
 		else{
+			
 			$issue_id = trim($request['issue_id']);
 			if(isset($issue_id)){
 				$activities = [];
@@ -712,7 +820,7 @@ class Main extends Action
 			return $this->json(['error' => "Please provide a username"], Response::HTTP_STATUS_BAD_REQUEST);
 				
 		}
-		$modified_activity = $this->modifyActivity($activity,$request['issueId'],$user_id,$request['spentMonths'],$request['spentWeeks'],$request['spentDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment'],$request['activity_type_id'],$request['inserted']);
+		$modified_activity = $this->modifyActivity($activity,$request['issueId'],$user_id,$request['spentMonths'],$request['spentWeeks'],$request['spentDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment'],$request['activityTypeId'],$request['inserted']);
 		return $this->json($modified_activity->toJSON(false));
 	}
 	
@@ -777,6 +885,15 @@ ORDER BY username, project_id";
 		return $this->json($result);
 	}
 	
+	public function runGetIssueByID(Request $request){
+		$issue_id = trim($request['issue_id']);
+		$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
+		$issue_no = $issue->getFormattedIssueNo();
+		$project_key = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getKey();
+		$href =  Context::getRouting()->generate('viewissue', ['project_key' => $project_key, 'issue_no' => $issue_no ], false);
+		return $this->json(["id" =>  $issue->getID(), "issue_no" => $issue->getFormattedIssueNo(), "state" => $issue->getState(), "closed" => $issue->isClosed(),"created_at" => $issue->getPosted(), "title" => $issue->getTitle(), "href" => $href]);
+	}
+	
 	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null,$comment = null,$activity_type_id = null,$inserted = null){
 		$modified_activity = $activity;
 		if(isset($issue_id)) $modified_activity->setIssue(trim($issue_id));
@@ -807,6 +924,7 @@ ORDER BY username, project_id";
 		$issue_id = $activity->getIssueID();
 		$issue = entities\Issue::getB2DBTable()->selectById($issue_id);
 		$issue_no = $issue->getFormattedIssueNo();
+		$issue_title = $issue->getTitle();
 		$project_key = entities\Project::getB2DBTable()->selectById($issue->getProjectID())->getKey();
 		$href =  Context::getRouting()->generate('viewissue', ['project_key' => $project_key, 'issue_no' => $issue_no ], false);
 		$spent_months = $activity->getSpentMonths();
@@ -827,7 +945,7 @@ ORDER BY username, project_id";
 			$activity_type_desc = "";
 		}
 		$comment = $activity->getComment();
-		$fields = ["id" => $activity_id, "username" => $user,"inserted" => $edited_at,"issue_id" => $issue_id,"issue_no" => $issue_no,"href" => $href ,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+		$fields = ["id" => $activity_id, "username" => $user,"inserted" => $edited_at,"issue_id" => $issue_id,"issue_no" => $issue_no,"issue_title" => $issue_title,"href" => $href ,"spent_months" =>$spent_months,"spent_weeks" => $spent_weeks,"spent_days" => $spent_days,"spent_hours" => $spent_hours, "spent_minutes" => $spent_minutes,"spent_points" => $spent_points, "comment" => $comment, "activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
 		return $fields;
 	}
 	
