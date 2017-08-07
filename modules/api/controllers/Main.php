@@ -759,60 +759,44 @@ class Main extends Action
 		$issue_id = trim($request['issue_id']);
 		if (!isset($request['issue_id'])) return $this->json(["error" => "issue_id required"], Response::HTTP_STATUS_BAD_REQUEST);
 		$activity_id = trim($request['activity_id']);
-		$activity_table = entities\IssueSpentTime::getB2DBTable();
-		$crit = $activity_table->getCriteria();
-		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
-		$activity = $activity_table->selectOne($crit);
+		$activity = tables\IssueSpentTimes::getTable()->selectById($activity_id);
 		if($activity == null)
 		{
 			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
-		$issues_tables = entities\Issue::getB2DBTable();
-		$crit = $issues_tables->getCriteria();
-		$crit->addWhere(tables\Issues::ID, $issue_id);
-		$issue = $issues_tables->selectOne($crit);
+		$issue = $this->getIssueByID($issue_id);
 		if($issue == null)
 		{
 			return $this->json(["error" => "issue_id ". $issue_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
-		$modified_activity = $this->modifyActivity($activity, $issue_id);
+		$modified_activity = $this->modifyActivity($activity, $issue);
 		return $this->json($modified_activity->toJSON(false));
 	}
 	
 	public function runDeleteActivity(Request $request){
-		$issue_id = trim($request['issue_id']);
-		if (isset($request['issue_id'])) return $this->json(["error" => "issue_id required"], Response::HTTP_STATUS_BAD_REQUEST);
 		$activity_id = trim($request['activity_id']);
-		$activity_table = entities\IssueSpentTime::getB2DBTable();
-		$crit = $activity_table->getCriteria();
-		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
-		$activity = $activity_table->selectOne($crit);
+		$activity = tables\IssueSpentTimes::getTable()->selectById($activity_id);
 		if($activity == null)
 		{
 			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
-		$crit = $activity_table->getCriteria();
-		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
-		$activity_table->doDelete($crit);
+		$issue = $activity->getIssue();
+		$activity->delete();
+		$issue->saveSpentTime();
 		return $this->json(["message" => "success"]);
 	}
 	
 	public function runModifyActivity(Request $request)
 	{
 		$activity_id = trim($request['activity_id']);
-		$activity_table = entities\IssueSpentTime::getB2DBTable();
-		$crit = $activity_table->getCriteria();
-		$crit->addWhere(entities\tables\IssueSpentTimes::ID, $activity_id);
-		$activity = $activity_table->selectOne($crit);
+		$activity = tables\IssueSpentTimes::getTable()->selectById($activity_id);
 		if($activity == null)
 		{
 			return $this->json(["error" => "id ". $activity_id ." not found"], Response::HTTP_STATUS_BAD_REQUEST);
 		}
 		if (isset($request['username'])){
-			if(entities\User::getByUsername(trim($request['username'])) != null)
-			{
-				$user_id = entities\User::getByUsername(trim($request['username']))->getID();
-			}else
+			$user = entities\User::getByUsername(trim($request['username']));
+			if($user == null)
 			{
 				return $this->json(['error' => "Could not find username:". trim($request['username']) ." , please provide a valid username"], Response::HTTP_STATUS_BAD_REQUEST);
 			}
@@ -820,7 +804,8 @@ class Main extends Action
 			return $this->json(['error' => "Please provide a username"], Response::HTTP_STATUS_BAD_REQUEST);
 				
 		}
-		$modified_activity = $this->modifyActivity($activity,$request['issueId'],$user_id,$request['spentMonths'],$request['spentWeeks'],$request['spentDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment'],$request['activityTypeId'],$request['inserted']);
+		$issue = $this->getIssueByID(trim($request['issueId']));
+		$modified_activity = $this->modifyActivity($activity,$issue,$user,$request['spentMonths'],$request['spentWeeks'],$request['spentDays'],$request['spentHours'],$request['spentMinutes'],$request['spentPoints'],$request['comment'],$request['activityTypeId'],$request['inserted']);
 		return $this->json($modified_activity->toJSON(false));
 	}
 	
@@ -894,23 +879,23 @@ ORDER BY username, project_id";
 		return $this->json(["id" =>  $issue->getID(), "issue_no" => $issue->getFormattedIssueNo(), "state" => $issue->getState(), "closed" => $issue->isClosed(),"created_at" => $issue->getPosted(), "title" => $issue->getTitle(), "href" => $href]);
 	}
 	
-	protected function modifyActivity($activity , $issue_id = null, $user_id = null , $months = null,$weeks = null,$days = null,$hours = null,$minutes = null,$points = null,$comment = null,$activity_type_id = null,$inserted = null){
-		$modified_activity = $activity;
-		if(isset($issue_id)) $modified_activity->setIssue(trim($issue_id));
-		if(isset($user_id)) $modified_activity->setUser(trim($user_id));
-		if(isset($months)) $modified_activity->setSpentMonths(trim($months));
-		if(isset($weeks)) $modified_activity->setSpentWeeks(trim($weeks));
-		if(isset($days)) $modified_activity->setSpentDays(trim($days));
-		if(isset($hours)) $modified_activity->setSpentHours(trim($hours));
-		if(isset($minutes)) $modified_activity->setSpentMinutes(trim($minutes));
-		if(isset($points)) $modified_activity->setSpentPoints(trim($points));
-		if(isset($comment)) $modified_activity->setComment(trim($comment));
+	protected function modifyActivity($activity, $issue = null, $user = null, $months = null, $weeks = null, $days = null, $hours = null, $minutes = null, $points = null, $comment = null, $activity_type_id = null, $inserted = null){
+		if(isset($issue)) $activity->setIssue($issue);
+		if(isset($user)) $activity->setUser($user);
+		if(isset($months)) $activity->setSpentMonths(trim($months));
+		if(isset($weeks)) $activity->setSpentWeeks(trim($weeks));
+		if(isset($days)) $activity->setSpentDays(trim($days));
+		if(isset($hours)) $activity->setSpentHours(trim($hours));
+		if(isset($minutes)) $activity->setSpentMinutes(trim($minutes));
+		if(isset($points)) $activity->setSpentPoints(trim($points));
+		if(isset($comment)) $activity->setComment(trim($comment));
 		if(isset($activity_type_id)){
-			$modified_activity->setActivityType(trim($activity_type_id));
+			$activity->setActivityType(trim($activity_type_id));
 		}
-		if(isset($inserted)) $modified_activity->setEditedAt(trim($inserted));
-		$modified_activity->save();
-		return $modified_activity;
+		if(isset($inserted)) $activity->setEditedAt(trim($inserted));
+		$activity->save();
+		$activity->getIssue()->saveSpentTime();
+		return $activity;
 	}
 
 	protected function getFieldsActivityByID($activity_id)
