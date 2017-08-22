@@ -313,26 +313,52 @@ class Main extends Action
 		}
 		else
 		{
-			$text = trim($request['search']);
-			$limit = intval($request['limit']);
-			$offset = intval($request['page']);
-			if($offset != 0)
+			$projects = [];
+			$p = entities\Project::getAllRootProjects(false);
+			//Recupero i progetti a cui l'utente corrente ha accesso
+			foreach ($p as $project)
 			{
-				$offset -= 1;
-				$offset *= $limit;
+				if ($project->hasAccess($this->getUser()))
+					$projects[] = $project->getId();
 			}
-			$counter = 0;
-			$issues= entities\Issue::findIssuesByText($text);
-			$ret_issues = [];
-			foreach ($issues[0] as $issue)
+  			$limit = intval($request['limit']);
+			
+			$crit = tables\Issues::getTable()->getCriteria();
+			$crit->addWhere(tables\Issues::DELETED, false);
+			$crit->addWhere(tables\Issues::STATE, entities\Issue::STATE_OPEN);
+			$crit->addWhere(tables\Issues::PROJECT_ID, $projects , Criteria::DB_IN);
+			$crit->addOrderBy(tables\Issues::LAST_UPDATED, Criteria::SORT_DESC);
+			if ($limit !== null || $limit != 0)
+				$crit->setLimit($limit);
+			
+			$recent_issues = [];
+			foreach (tables\Issues::getTable()->select($crit) as $issue)
 			{
-				$ret_issues[] = $issue->toJSON(false);
-				$counter++;
-				if($limit != 0 && $counter == $limit){
-					break;
-				}
+				$recent_issues[] = $issue->toJSON(false);
 			}
-			return $this->json($ret_issues);
+			
+			return $this->json($recent_issues); 
+// 			<-> PARTE VECCHIA CHE EFFETTUA REALMENTE LA RICERCA, SOLUZIONE TRONCATA PER NON SOVRACCARICARE TBG N.B AGGIUNGERE VARIABILE LIMIT
+// 			$text = trim($request['search']);
+// 			$offset = intval($request['page']);
+// 			if($offset != 0)
+// 			{
+// 				$offset -= 1;
+// 				$offset *= $limit;
+// 			}
+// 			$counter = 0;
+// 			$issues = entities\Issue::findIssuesByText($text);
+// 			$ret_issues = [];
+// 			foreach ($issues[0] as $issue)
+// 			{
+// 				$ret_issues[] = $issue->toJSON(false);
+// 				$counter++;
+// 				if($limit != 0 && $counter == $limit){
+// 					break;
+// 				}
+// 			}
+// 			return $this->json($ret_issues);
+			
 		}
 	}
 	
@@ -658,6 +684,12 @@ class Main extends Action
 			}else{
 				$spenttime->setUser(\thebuggenie\core\framework\Context::getUser());
 			}
+			
+			//Converto il codice per il carattere apostrofo con l'apostrofo
+			if($request['comment'] != null){
+				$spenttime->setComment(htmlspecialchars_decode($request['comment'], ENT_QUOTES));
+			}
+			
 			$spenttime->setSpentPoints($request['spentPoints']);
 			$spenttime->setSpentMinutes($request['spentMinutes']);
 			$spenttime->setSpentHours($request['spentHours']);
@@ -666,7 +698,6 @@ class Main extends Action
 			$spenttime->setSpentMonths($request['spentMonths']);
 			$spenttime->setActivityType($request['activityTypeId']);
 			$spenttime->setEditedAt($request['inserted']);
-			$spenttime->setComment($request['comment']);
 			$spenttime->save();
 			$spenttime->getIssue()->saveSpentTime();
 			return $this->json($this->getFieldsActivityByID($spenttime->getID()));
@@ -888,7 +919,13 @@ ORDER BY username, project_id";
 		if(isset($hours)) $activity->setSpentHours(trim($hours));
 		if(isset($minutes)) $activity->setSpentMinutes(trim($minutes));
 		if(isset($points)) $activity->setSpentPoints(trim($points));
-		if(isset($comment)) $activity->setComment(trim($comment));
+		if(isset($comment)){
+			//Converto il codice per il carattere apostrofo con l'apostrofo
+			if($comment != null){
+				$comment = htmlspecialchars_decode($comment, ENT_QUOTES);
+			}
+			$activity->setComment(trim($comment));
+		}
 		if(isset($activity_type_id)){
 			$activity->setActivityType(trim($activity_type_id));
 		}
