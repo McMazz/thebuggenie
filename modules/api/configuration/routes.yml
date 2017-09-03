@@ -94,7 +94,7 @@ api_list_fields_by_issuetypes:
     parameters:
         format: json
     csrf_enabled: false
-    
+
 
 api_list_activities_by_projects:
     route: /api/projects/activities
@@ -207,3 +207,11 @@ api_list_delete_activity:
     parameters:
         format: json
     csrf_enabled: false
+    
+api_report_activities:
+    route: /api/report/activities
+    module: api
+    action: genReportActivity
+    parameters:
+        format: json
+    csrf_enabled: false   

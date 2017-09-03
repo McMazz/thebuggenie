@@ -13,6 +13,9 @@ use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
 use thebuggenie\core\entities\tables\CustomFieldOptions;
+use thebuggenie\core\entities\Team;
+use thebuggenie\core\entities\User;
+use thebuggenie\core\entities\CustomDatatype;
 
 class Main extends Action
 {
@@ -189,6 +192,130 @@ class Main extends Action
 			}
 		}
 		return $is_admin;
+	}
+	
+	public function runGenReportActivity(Request $request)
+	{
+		$issues = [];
+		$current_user_id = thebuggenie\core\framework\Context::getUser()->getID();
+		$date_from = trim($request['date_from']);
+		$date_to = trim($request['date_to']);
+		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
+		$crit = $time_spent_table->getCriteria();
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_from, $crit::DB_GREATER_THAN_EQUAL);
+		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_to, $crit::DB_LESS_THAN_EQUAL);
+		$crit->addOrderBy(tables\IssueSpentTimes::EDITED_AT, $crit::SORT_DESC_NUMERIC);
+		foreach ($time_spent_table->select($crit) as $activity)
+		{
+			$issue = $this->getIssueByID($activity->getIssueID());
+			$project = entities\Project::getB2DBTable()->selectById($issue->getProjectID());
+			$issue_type = entities\Issuetype::getB2DBTable()->selectById($issue->getIssueType()->getID());
+			$activity_type_id = $activity->getActivityTypeID();
+			$issue_status = entities\Status::getB2DBTable()->selectById($issue->getStatus()->getID());
+			$customValues = [];
+			if ($rows = tables\IssueCustomFields::getTable()->getAllValuesByIssueID($issue->getID()))
+			{
+				foreach ($rows as $row)
+				{
+					$custom_field_id = $row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID);
+					if($custom_field_id == 1){
+						if($row->get(tables\IssueCustomFields::OPTION_VALUE) != null){
+							$refOrder = $row->get(tables\IssueCustomFields::OPTION_VALUE);
+							$customValues[$custom_field_id] = $refOrder;
+						}
+					}else if($custom_field_id != null){
+						$customOptionID = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
+						if($customOptionID != 0){
+							$customFieldOption = tables\CustomFieldOptions::getTable()->getByID($customOptionID);
+							if($customFieldOption != null){
+								if($custom_field_id == 2){
+									
+									$ticketType = $customFieldOption->get(tables\CustomFieldOptions::NAME);
+									$customValues[$custom_field_id] = $ticketType;
+								}else if($custom_field_id == 4){
+									$refCustomer = $customFieldOption->get(tables\CustomFieldOptions::NAME);
+									$customValues[$custom_field_id] = $refCustomer;
+								}else if($custom_field_id == 5){
+									$refDepart = $customFieldOption->get(tables\CustomFieldOptions::NAME);
+									$customValues[$custom_field_id] = $refDepart;
+								}
+							}
+						}
+					}
+				}
+			}
+			if($issue->hasAssignee()){
+				$assignee = $issue->getAssignee();
+				if($assignee != null){
+					$assignee = $assignee->getUsername();
+				}else{
+					$assignee = "";
+				}
+			}else{
+				$assignee = "";
+			}
+			if($issue->getDescription() != null){
+				$issueDescription = $issue->getDescription();
+			}else{
+				$issueDescription = "";
+			}
+			$owner = $issue->getOwner();
+			if($owner!= null){
+				if($owner instanceof Team ){
+					$owner = $owner->getName();
+				}else if($owner instanceof  User){
+					$owner = $owner->getRealname();
+				}else{
+					$owner = $owner->getUsername();
+				}
+			}else{
+				$owner = "";
+			}
+			if($issue_type != null){
+				$issue_type = $issue_type->getName();
+			}else{
+				$issue_type = "";
+			}
+			if($issue_status != null){
+				$issue_status= $issue_status->getName();
+			}else{
+				$issue_status= "";
+			}
+			if($activity_type_id != 0){
+				$listTypeTable = entities\tables\ListTypes::getTable();
+				$crit3 = $listTypeTable->getCriteria();
+				$crit3->addWhere(entities\tables\ListTypes::ID, $activity_type_id);
+				$result = $listTypeTable->selectOne($crit3);
+				$activity_type_desc = $result->getName();
+			}else{
+				$activity_type_id = 0;
+				$activity_type_desc = "";
+			}
+			if(isset($customValues[2])){
+				$ticketType = $customValues[2];
+			}else{
+				$ticketType = "";
+			}
+			if(isset($customValues[1])){
+				$refOrder= $customValues[1];
+			}else{
+				$refOrder= "";
+			}
+			if(isset($customValues[5])){
+				$refDepart= $customValues[5];
+			}else{
+				$refDepart= "";
+			}
+			if(isset($customValues[4])){
+				$refCustomer= $customValues[4];
+			}else{
+				$refCustomer= "";
+			}
+			$minutesProvided = ($activity->getSpentWeeks() * 2400) + ($activity->getSpentDays() * 480 ) + (($activity->getSpentHours()/100)*60) + $activity->getSpentMinutes();
+			$estimatedTime = ($issue->getEstimatedWeeks() * 2400) + ($issue->getEstimatedDays() * 480) + (($issue->getEstimatedHours())*60) + $issue->getEstimatedMinutes();
+			$issues[] = ["project_id" => $project->getID(),"project_name" => $project->getPrefix(),"username" => $activity->getUser()->getUsername(),"employee" => $activity->getUser()->getRealname(),"issue_id" => $activity->getIssueID(), "issue_name" => $issue->getName(),"issue_description" => $issueDescription,"issue_no" => $issue->getFormattedIssueNo(), "assigned_to" => $assignee,"posted_by" => $issue->getPostedBy()->getRealname(),"owned_by" => $owner,"status" => $issue->getStatus()->getID(),"status_description" => $issue_status,"issue_type" => $issue_type,"ref_order" => $refOrder,"ref_customer" => $refCustomer,"ref_depart" => $refDepart,"ticket_type" => $ticketType,"href" => $this->getIssueHrefByID($activity->getIssueID()),"spent_points" => $activity->getSpentPoints(),"minutes_provided" => $minutesProvided,"estimated_minutes" => $estimatedTime,"comment" => $activity->getComment(), "date_of_entry" => $activity->getEditedAt(),"activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+		}
+		return $this->json($issues);
 	}
 	
 	public function runListTimeSpentBetweenDates(Request $request)
@@ -441,7 +568,7 @@ class Main extends Action
 // 	{
 // 		$project_id = trim($request['project_id']);
 // 		$project = entities\Project::getB2DBTable()->selectByID($project_id);
-// 		$fields_array = $project->getReportableFieldsArray($request['issue_type'], true);
+// 		$fields_array = $project->getReportableFieldsArray($request['issue_type']);
 // 		foreach ($fields_array as $key => $value){
 // 			if(isset($value['custom'])){
 // 				if ($value['custom'] == true){
@@ -534,8 +661,6 @@ class Main extends Action
 							$obj = ["id" => $row->get(tables\IssueFields::ID), "description" => $field_name, "name" => $field_key ,"required" => $required, "additional" => $additional, "values" => $option_values, "custom" => $is_custom];
 						}
 					}
-					
-					
 					$fields[$field_key] =  $obj;
 				}
 			}
