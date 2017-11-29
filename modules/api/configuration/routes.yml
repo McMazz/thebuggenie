@@ -87,6 +87,14 @@ api_list_issues_type_by_project:
         format: json
     csrf_enabled: false
 
+api_list_fields_by_issuetypesNew:
+    route: /api/projects/:project_id/issuetypes/:issue_type/fieldsTest
+    module: api
+    action: listFieldsByIssueTypeTest
+    parameters:
+        format: json
+    csrf_enabled: false
+
 api_list_fields_by_issuetypes:
     route: /api/projects/:project_id/issuetypes/:issue_type/fields
     module: api
@@ -94,8 +102,7 @@ api_list_fields_by_issuetypes:
     parameters:
         format: json
     csrf_enabled: false
-
-
+    
 api_list_activities_by_projects:
     route: /api/projects/activities
     module: api
@@ -214,4 +221,12 @@ api_report_activities:
     action: genReportActivity
     parameters:
         format: json
-    csrf_enabled: false   
+    csrf_enabled: false
+    
+api_initial_advance:
+    route: /api/issues/:issue_id/initial_advance
+    module: api
+    action: initialAdvance
+    parameters:
+        format: json
+    csrf_enabled: false
