@@ -222,11 +222,19 @@ api_report_activities:
     parameters:
         format: json
     csrf_enabled: false
-    
-api_initial_advance:
-    route: /api/issues/:issue_id/initial_advance
+
+api_report_project_activities:
+    route: /api/report/projectActivities
     module: api
-    action: initialAdvance
+    action: genReportProjectActivity
+    parameters:
+        format: json
+    csrf_enabled: false    
+    
+api_issue_flow_manipulator:
+    route: /api/issues/:issue_id/changeIssueStatus
+    module: api
+    action: changeIssueStatus
     parameters:
         format: json
     csrf_enabled: false

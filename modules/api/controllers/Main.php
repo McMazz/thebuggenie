@@ -16,6 +16,11 @@ use thebuggenie\core\entities\tables\CustomFieldOptions;
 use thebuggenie\core\entities\Team;
 use thebuggenie\core\entities\User;
 use thebuggenie\core\entities\CustomDatatype;
+use thebuggenie\core\entities\Status;
+use thebuggenie\core\entities\Workflow;
+use b2db\Table;
+use thebuggenie\core\entities\tables\Issues;
+use thebuggenie\core\entities\IssueSpentTime;
 
 class Main extends Action
 {
@@ -194,8 +199,160 @@ class Main extends Action
 		return $is_admin;
 	}
 	
-	public function runInitialAdvance(Request $request){
-		return $this->json($request['issue_id']);
+	/**
+	 * Valori ammessi per l'action type:
+	 * O - Open: porta lo stato di lavorazione da "Nuovo" ad "In Lavorazione"
+	 * C - Close: porto lo stato di lavorazione da "In Lavorazione" a "Chiuso"
+	 * N - Next: porta una issue allo stato successivo
+	 * @var \thebuggenie\core\framework\Request $option
+	 */
+	public function runChangeIssueStatus(Request $request){
+		$issue = $this->getIssueByID($request['issue_id']);
+		$option = $request['actionType'];
+		if($issue != null && $option != null){
+			if ($issue->isWorkflowTransitionsAvailable()){
+				$transitionsData = $issue->getAvailableWorkflowStatusIDsAndTransitions();
+				if ($transitionsData != null){
+					$transitions = $issue->getAvailableWorkflowTransitions();
+					$issue_status_id = $issue->getStatus()->getID();
+					if ($option == 'O'|| $option == 'o'){
+						if($issue_status_id == 23 || $issue_status_id == 32 || $issue_status_id == 31){ //Solo se lo stato è "Nuovo"
+							array_values($transitions)[0]->transitionIssueToOutgoingStepWithoutRequest($issue);
+							return $this->json(["message" => "success", "status" => $issue->getStatus()->getName()], Response::HTTP_STATUS_OK);
+						}else {
+							return $this->json(["error" => "The issue status: '" . $issue->getStatus()->getName() . "' is not handled for the desired type of operation"], Response::HTTP_STATUS_BAD_REQUEST);
+						}
+					}else if ($option == 'C'|| $option == 'c'){
+						$transitions_ids = array_keys($transitions);
+						if(array_key_exists(189, $transitions)){
+							$transitions[189]->transitionIssueToOutgoingStepWithoutRequest($issue);
+						}else if(array_key_exists(197, $transitions)) {
+							$transitions[197]->transitionIssueToOutgoingStepWithoutRequest($issue);
+						}else if(array_key_exists(214, $transitions)){
+							$transitions[214]->transitionIssueToOutgoingStepWithoutRequest($issue);
+						}else {
+							return $this->json(["error" => "Unable to close the issue in the current state!"], Response::HTTP_STATUS_BAD_REQUEST);
+						}
+						return $this->json(["message" => "success", "status" => $issue->getStatus()->getName()], Response::HTTP_STATUS_OK);
+					}else if ($option == 'N'|| $option == 'n'){
+						$transitions = $issue->getAvailableWorkflowTransitions();
+						if(sizeof($transitions) == 1){
+							array_values($transitions)[0]->transitionIssueToOutgoingStepWithoutRequest($issue);
+							return $this->json(["message" => "success", "status" => $issue->getStatus()->getName()], Response::HTTP_STATUS_OK);
+						}else if (sizeof($transitions) > 1){
+							return $this->json(["error" => "Multiple transitions available, unable to proceed without user intervention!"], Response::HTTP_STATUS_BAD_REQUEST);
+						}else{
+							return $this->json(["error" => "No transitions are available for this issue!"], Response::HTTP_STATUS_BAD_REQUEST);
+						}
+					}
+				}else{
+					return $this->json(["error" =>"No workflow transitions are available for this issue"], Response::HTTP_STATUS_BAD_REQUEST);
+				}
+			}else{
+				return $this->json(["error" =>"No workflow transitions are available for this issue"], Response::HTTP_STATUS_BAD_REQUEST);
+			}
+		}else{
+			if ($issue == null){
+				return $this->json(["error" => "Issue ".$request['issue_id']." not found!"], Response::HTTP_STATUS_BAD_REQUEST);
+			}else {
+				return $this->json(["error" => "action_type parameter is required to proceed!"], Response::HTTP_STATUS_BAD_REQUEST);
+			}
+		}
+	}
+	
+	protected function setIssueComment($issue, $comment_val){
+		$comment = new \thebuggenie\core\entities\Comment();
+		$comment->setContent($comment_val);
+		$comment->setPostedBy(thebuggenie\core\framework\Context::getUser()->getID());
+		$comment->setTargetID($issue->getID());
+		$comment->setTargetType(\thebuggenie\core\entities\Comment::TYPE_ISSUE);
+		$comment->setModuleName('core');
+		$comment->setIsPublic(true);
+		$comment->setSystemComment(false);
+		$comment->save();
+		$issue->setSaveComment($comment);
+		$issue->save();
+	}
+	
+	protected function getIssueStatusDescriptions(){
+		$listTypeTable = tables\ListTypes::getTable();
+		$crit = $listTypeTable->getCriteria();
+		$crit->addWhere(tables\ListTypes::ITEMTYPE, "status", Criteria::DB_EQUALS);
+		$resultIssueStatus = $listTypeTable->doSelect($crit);
+		$issueStatusDescriptions = [];
+		while($issuestatusrow = $resultIssueStatus->getNextRow()){
+			$issueStatusDescriptions[$issuestatusrow->get(tables\ListTypes::ID)] = $issuestatusrow->get(tables\ListTypes::NAME);
+		}
+		return $issueStatusDescriptions;
+	}
+	
+	protected function getUsersNameInfo(){
+		$usersTable = tables\Users::getTable();
+		$resultUsers = $usersTable->selectAll();
+		$usersNames = [];
+		foreach ($resultUsers as $row){
+			$usersNames[$row->getID()] = $row->getUsername() . "," . $row->getRealname();
+		}
+		return $usersNames;
+	}
+	
+	protected function safeFetchArray($array, $id){
+		if(isset($array[$id])){
+			if (strpos($array[$id], ",")){
+				return explode(",", $array[$id]);
+			}else{
+				return $array[$id];
+			}
+		}else{
+			return "";
+		}
+	}
+	
+	protected function safeFetchArrayWithoutSeparating($array, $id){
+		if(isset($array[$id])){
+			return $array[$id];
+		}else{
+			return "";
+		}
+	}
+	
+	private function fetchCustomFields($issue_id){
+		$customValues = [];
+		if ($rows = tables\IssueCustomFields::getTable()->getAllValuesByIssueID($issue_id))
+		{
+			foreach ($rows as $row)
+			{
+				$custom_field_id = $row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID);
+				$customOptionID = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
+				// 1 = refOrder , 6 = refModulo , 7 = refServizio
+				if($custom_field_id == 1 || $custom_field_id == 6 || $custom_field_id == 7){
+					if($row->get(tables\IssueCustomFields::OPTION_VALUE) != null){
+						$customValues[$custom_field_id] = $row->get(tables\IssueCustomFields::OPTION_VALUE);
+					}
+				}else if($custom_field_id != null){
+					if($customOptionID != null && $customOptionID != 0){
+						//ticket type
+						if($custom_field_id == 2){
+							$customFieldOption = tables\CustomFieldOptions::getTable()->getByID($customOptionID);
+							$customValues[$custom_field_id] = $customFieldOption->get(tables\CustomFieldOptions::NAME);
+						}else if($custom_field_id == 4){
+							//ref depart
+							$component = tables\Components::getTable()->getByID($customOptionID);
+							if($component != null){
+								$customValues[$custom_field_id] = $component->get(tables\Components::NAME);
+							}
+						}else if($custom_field_id == 5){
+							//ref customer
+							$edition = tables\Editions::getTable()->getByID($customOptionID);
+							if ($edition != null){
+								$customValues[$custom_field_id] = $edition->get(tables\Editions::NAME);;
+							}
+						}
+					}
+				}
+			}
+		}
+		return $customValues;
 	}
 	
 	public function runGenReportActivity(Request $request)
@@ -204,13 +361,23 @@ class Main extends Action
 		$date_from = trim($request['date_from']);
 		$date_to = trim($request['date_to']);
 		$username = trim($request['username']);
+		$project_str = trim($request['projects']);
+
+		//Recupero i dati relativi agli issuestatus e gli utenti un'unica volta
+		$issueStatusDescriptions = $this->getIssueStatusDescriptions();
+		$usersNames = $this->getUsersNameInfo();
 		
 		$time_spent_table = entities\IssueSpentTime::getB2DBTable();
 		$crit = $time_spent_table->getCriteria();
+		$crit->addJoin(tables\Issues::getTable(), tables\Issues::ID, tables\IssueSpentTimes::ISSUE_ID);
+		$crit->addJoin(tables\ListTypes::getTable(), tables\ListTypes::ID, tables\IssueSpentTimes::ACTIVITY_TYPE);
+		$crit->addJoin(tables\Projects::getTable(), tables\Projects::ID, tables\Issues::PROJECT_ID, array(), $crit::DB_LEFT_JOIN, Issues::getTable());
+		$crit->addJoin(tables\IssueTypes::getTable(), tables\IssueTypes::ID, tables\Issues::ISSUE_TYPE, array(), $crit::DB_LEFT_JOIN, Issues::getTable());
 		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_from, $crit::DB_GREATER_THAN_EQUAL);
 		$crit->addWhere(tables\IssueSpentTimes::EDITED_AT, $date_to, $crit::DB_LESS_THAN_EQUAL);
 		$crit->addOrderBy(tables\IssueSpentTimes::EDITED_AT, $crit::SORT_DESC_NUMERIC);
 		
+		//Verifico variabili in input
 		if ($username != null){
 			$searched_user = entities\User::getByUsername($username);
 			if ($searched_user != null && $searched_user->getID() != null){
@@ -219,131 +386,74 @@ class Main extends Action
 				return $this->json(["error" => "Utente " . $username . " non trovato"], 404);
 			}
 		}
+		if($project_str != null){
+			$project_ids = explode(",", $project_str);
+			foreach ($project_ids as $prj_id){
+				$project_tmp = $this->getProjectByID($prj_id);
+				//Verifico correttezza id
+				if($project_tmp == null){
+	    	    	return $this->json(["error" => "Could not find a project for the id '" . $prj_id . "'"] , Response::HTTP_STATUS_BAD_REQUEST);
+	    	    }
+			}
+	    	$crit->addWhere(tables\Issues::PROJECT_ID, $project_ids, Criteria::DB_IN);
+		}
 		
-		foreach ($time_spent_table->select($crit) as $activity)
+		$resultset = $time_spent_table->doSelect($crit);
+		while ($resultset != null && $activity = $resultset->getNextRow())
 		{
-			$issue = $this->getIssueByID($activity->getIssueID());
-			$project = entities\Project::getB2DBTable()->selectById($issue->getProjectID());
-			$issue_type = entities\Issuetype::getB2DBTable()->selectById($issue->getIssueType()->getID());
-			$activity_type_id = $activity->getActivityTypeID();
-			$issue_status = entities\Status::getB2DBTable()->selectById($issue->getStatus()->getID());
-			$customValues = [];
-			if ($rows = tables\IssueCustomFields::getTable()->getAllValuesByIssueID($issue->getID()))
-			{
-				foreach ($rows as $row)
-				{
-					$custom_field_id = $row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID);
-					$customOptionID = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
-					if($custom_field_id == 1){
-						if($row->get(tables\IssueCustomFields::OPTION_VALUE) != null){
-							$refOrder = $row->get(tables\IssueCustomFields::OPTION_VALUE);
-							$customValues[$custom_field_id] = $refOrder;
-						}
-					}else if($custom_field_id != null){
-						if($customOptionID != null && $customOptionID != 0){
-							if($custom_field_id == 2){
-								$customFieldOption = tables\CustomFieldOptions::getTable()->getByID($customOptionID);
-								$ticketType = $customFieldOption->get(tables\CustomFieldOptions::NAME);
-								$customValues[$custom_field_id] = $ticketType;
-							}else if($custom_field_id == 4){
-								$component = tables\Components::getTable()->getByID($customOptionID);
-								if($component != null){
-									$refDepart = $component->get(tables\Components::NAME);
-									$customValues[$custom_field_id] = $refDepart;
-								}
-							}else if($custom_field_id == 5){
-								$edition = tables\Editions::getTable()->getByID($customOptionID);
-								if ($edition != null){
-									$refCustomer = $edition->get(tables\Editions::NAME);
-									$customValues[$custom_field_id] = $refCustomer;
-								}
-							}
-						}
-					}
-				}
-			}
-			if($issue->hasAssignee()){
-				$assignee = $issue->getAssignee();
-				if($assignee != null){
-					$assignee = $assignee->getUsername();
-				}else{
-					$assignee = "";
-				}
-			}else{
-				$assignee = "";
-			}
-			if($issue->getDescription() != null){
-				$issueDescription = $issue->getDescription();
-			}else{
-				$issueDescription = "";
-			}
-			$owner = $issue->getOwner();
-			if($owner!= null){
-				if($owner instanceof Team ){
-					$owner = $owner->getName();
-				}else if($owner instanceof  User){
-					$owner = $owner->getRealname();
-				}else{
-					$owner = $owner->getUsername();
-				}
-			}else{
-				$owner = "";
-			}
-			$posted_by = $issue->getPostedBy();
-			if($posted_by != null){
-				if($posted_by instanceof Team ){
-					$posted_by = $posted_by->getName();
-				}else if($posted_by instanceof  User){
-					$posted_by= $posted_by->getRealname();
-				}else{
-					$posted_by= $posted_by->getUsername();
-				}
-			}else{
-				$posted_by = "";		
-			}
-			if($issue_type != null){
-				$issue_type = $issue_type->getName();
-			}else{
-				$issue_type = "";
-			}
-			if($issue_status != null){
-				$issue_status= $issue_status->getName();
-			}else{
-				$issue_status= "";
-			}
-			if($activity_type_id != 0){
-				$listTypeTable = entities\tables\ListTypes::getTable();
-				$crit3 = $listTypeTable->getCriteria();
-				$crit3->addWhere(entities\tables\ListTypes::ID, $activity_type_id);
-				$result = $listTypeTable->selectOne($crit3);
-				$activity_type_desc = $result->getName();
-			}else{
-				$activity_type_id = 0;
-				$activity_type_desc = "";
-			}
-			if(isset($customValues[2])){
-				$ticketType = $customValues[2];
-			}else{
-				$ticketType = "";
-			}
-			if(isset($customValues[1])){
-				$refOrder= $customValues[1];
-			}else{
-				$refOrder= "";
-			}
-			if(isset($customValues[4])){
-				$refDepart= $customValues[4];
-			}else{
-				$refDepart= "";
-			}
-			if(isset($customValues[5])){
-				$refCustomer= $customValues[5];
-			}else{
-				$refCustomer= "";
-			}
-			$minutesProvided = ($activity->getSpentWeeks() * 2400) + ($activity->getSpentDays() * 480 ) + (($activity->getSpentHours()/100)*60) + $activity->getSpentMinutes();
-			$estimatedTime = ($issue->getEstimatedWeeks() * 2400) + ($issue->getEstimatedDays() * 480) + (($issue->getEstimatedHours())*60) + $issue->getEstimatedMinutes();
-			$issues[] = ["project_id" => $project->getID(),"project_name" => $project->getPrefix(),"username" => $activity->getUser()->getUsername(),"employee" => $activity->getUser()->getRealname(),"issue_id" => $activity->getIssueID(), "issue_name" => $issue->getName(),"issue_description" => $issueDescription,"issue_no" => $issue->getFormattedIssueNo(), "assigned_to" => $assignee,"posted_by" => $posted_by,"owned_by" => $owner,"status" => $issue->getStatus()->getID(),"status_description" => $issue_status,"issue_type" => $issue_type,"ref_order" => $refOrder,"ref_customer" => $refCustomer,"ref_depart" => $refDepart,"ticket_type" => $ticketType,"href" => $this->getIssueHrefByID($activity->getIssueID()),"spent_points" => $activity->getSpentPoints(),"minutes_provided" => $minutesProvided,"estimated_minutes" => $estimatedTime,"comment" => $activity->getComment(), "date_of_entry" => $activity->getEditedAt(),"activity_type_id" => $activity_type_id, "activity_type_desc" => $activity_type_desc];
+			$issue = $activity->get(tables\IssueSpentTimes::ISSUE_ID);
+			$issue_name = $activity->get(tables\Issues::TITLE);
+			$project_name = $activity->get(tables\Projects::NAME);
+			$project_id = $activity->get(tables\Projects::ID);
+			$project_prefix = $activity->get(tables\Projects::PREFIX);
+			$issue_no_id = $activity->get(tables\Issues::ISSUE_NO);
+			$issue_no = $project_prefix . "-" . $issue_no_id;
+			$issue_type_id = $activity->get(tables\IssueTypes::ID);
+			$issue_type = $activity->get(tables\IssueTypes::NAME);
+			$activity_type_id =  $activity->get(tables\IssueSpentTimes::ACTIVITY_TYPE);
+			$activity_type_desc= $activity->get(tables\ListTypes::NAME);
+			$issue_status_id = $activity->get(tables\Issues::STATUS);
+			$issue_status = isset($issueStatusDescriptions[$issue_status_id]) ? $issueStatusDescriptions[$issue_status_id] : "";
+			$assignee_id = $activity->get(tables\Issues::ASSIGNEE_USER);
+			$issueDescription = $activity->get(tables\Issues::DESCRIPTION);
+			$owner_id = $activity->get(tables\Issues::OWNER_USER);
+			$spentPoints = $activity->get(Tables\IssueSpentTimes::SPENT_POINTS);
+			$comment = $activity->get(Tables\IssueSpentTimes::COMMENT);
+			$edited_at = $activity->get(Tables\IssueSpentTimes::EDITED_AT);
+			$posted_by_id = $activity->get(tables\Issues::POSTED_BY);
+			$username_id = $activity->get(Tables\IssueSpentTimes::EDITED_BY);
+			$username_data = $this->safeFetchArray($usersNames,$username_id);
+			$username = is_array($username_data) ? $username_data[0] : $username;
+			$assignee_data = $this->safeFetchArray($usersNames,$assignee_id);
+			$assignee = is_array($assignee_data) ? $assignee_data[0] : $assignee_data;
+			$owner_data = $this->safeFetchArray($usersNames,$owner_id);
+			$owner = is_array($owner_data) ? $owner_data[0] : $owner_data;
+			$posted_by_data = $this->safeFetchArray($usersNames,$posted_by_id);
+			$posted_by = is_array($posted_by_data) ? $posted_by_data[0] : $posted_by_data;
+			$employee = is_array($username_data) ? $username_data[1] : "";
+			
+			//Carico i custom fields della issue
+			$customValues = $this->fetchCustomFields($issue);
+			
+			$ticketType = $this->safeFetchArrayWithoutSeparating($customValues, 2);
+			$refOrder = $this->safeFetchArrayWithoutSeparating($customValues, 1);
+			$refDepart = $this->safeFetchArrayWithoutSeparating($customValues, 4);
+			$refCustomer= $this->safeFetchArrayWithoutSeparating($customValues, 5);
+			$refModulo= $this->safeFetchArrayWithoutSeparating($customValues, 6);
+			$refServizio= $this->safeFetchArrayWithoutSeparating($customValues, 7);
+
+			$spentWeeks = $activity->get(tables\IssueSpentTimes::SPENT_WEEKS);
+			$spentDays = $activity->get(tables\IssueSpentTimes::SPENT_DAYS);
+			$spentHours = $activity->get(tables\IssueSpentTimes::SPENT_HOURS);
+			$spentMinutes = $activity->get(tables\IssueSpentTimes::SPENT_MINUTES);
+			$minutesProvided = ($spentWeeks * 2400) + ($spentDays * 480 ) + (($spentHours/100)*60) + $spentMinutes;
+
+			$estimatedWeeks = $activity->get(tables\Issues::ESTIMATED_WEEKS);
+			$estimatedDays = $activity->get(tables\Issues::ESTIMATED_DAYS);
+			$estimatedHours = $activity->get(tables\Issues::ESTIMATED_HOURS);
+			$estimatedMinutes = $activity->get(tables\Issues::ESTIMATED_MINUTES);
+			$estimatedTime = ($estimatedWeeks * 2400) + ($estimatedDays * 480) + (($estimatedHours/100) * 60) + $estimatedMinutes;
+			$issues[] = ["project_id" => (int) $project_id,"project_name" => $project_name,"username" => $username,"employee" => $employee,"issue_id" => (int)$issue, "issue_name" => $issue_name,"issue_description" => $issueDescription,"issue_no" => $issue_no, "assigned_to" => $assignee,"posted_by" => $posted_by,"owned_by" => $owner,"status" => (int)$issue_status_id,"status_description" => $issue_status,"issue_type" => $issue_type,"ref_order" => $refOrder,"ref_customer" => $refCustomer,"ref_depart" => $refDepart,"ref_csec_modulo" => $refModulo, "ref_csec_servizio" => $refServizio,"ticket_type" => $ticketType,"spent_points" => (int)$spentPoints,"minutes_provided" => $minutesProvided,"estimated_minutes" => $estimatedTime,"comment" => $comment, "date_of_entry" => (int) $edited_at,"activity_type_id" => (int)$activity_type_id, "activity_type_desc" => $activity_type_desc];
 		}
 		return $this->json($issues);
 	}
@@ -1148,6 +1258,207 @@ ORDER BY username, project_id";
 		return $this->json(["id" =>  $issue->getID(), "issue_no" => $issue->getFormattedIssueNo(), "state" => $issue->getState(), "closed" => $issue->isClosed(),"created_at" => $issue->getPosted(), "title" => $issue->getTitle(), "href" => $href]);
 	}
 	
+	public function runGenReportProjectActivity(Request $request)
+	{
+		
+		$num_rollback_days = trim($request['rollback_days']);		
+		$target_project = trim($request['project']);
+		
+		if ($num_rollback_days == null){
+			return $this->json(["error" => "the rollback_days parameter is required!"], Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		
+		$project = $this->getProjectByID($target_project);
+		if($project == null){
+			return $this->json(["error" => "Could not find a project for the id '" . $target_project . "'"] , Response::HTTP_STATUS_BAD_REQUEST);
+		}
+		
+		$today_epoch_midnight = mktime(null,null,null,date("m"),date("d"),date("Y"));
+		$seconds_in_a_day = 86400;
+		$target_time = $today_epoch_midnight - ($seconds_in_a_day * $num_rollback_days);
+		
+		$issues = [];
+		$issues_table = thebuggenie\core\entities\Issue::getB2DBTable();
+		
+		$crit = $issues_table->getCriteria();
+		$crit->addWhere(tables\Issues::PROJECT_ID, $target_project);
+		$crit->addWhere(tables\Issues::STATE, 0);
+		$crit->addOrderBy(tables\Issues::ID, $crit::SORT_ASC_NUMERIC);
+		
+		foreach ($issues_table->select($crit) as $issue)
+		{
+			$issues[] = $this->getIssueReportInfo($issue);
+		}
+		
+		$crit = null;
+		$crit = $issues_table->getCriteria();
+		$crit->addWhere(tables\Issues::PROJECT_ID, $target_project);
+		$crit->addWhere(tables\Issues::LAST_UPDATED, $target_time, $crit::DB_GREATER_THAN_EQUAL);
+		$crit->addWhere(tables\Issues::STATE, 1);
+		$crit->addOrderBy(tables\Issues::ID, $crit::SORT_ASC_NUMERIC);
+		
+		foreach ($issues_table->select($crit) as $issue)
+		{
+			$issues[] = $this->getIssueReportInfo($issue);
+		}
+		return $this->json($issues);
+	}
+	
+	protected function getIssueReportInfo($issue){
+		$issue_type = entities\Issuetype::getB2DBTable()->selectById($issue->getIssueType()->getID());
+		$issue_status = entities\Status::getB2DBTable()->selectById($issue->getStatus()->getID());
+		$customValues = [];
+		$project = $this->getProjectByID($issue->getProjectID());
+		
+		if ($rows = tables\IssueCustomFields::getTable()->getAllValuesByIssueID($issue->getID()))
+		{
+			foreach ($rows as $row)
+			{
+				$custom_field_id = $row->get(tables\IssueCustomFields::CUSTOMFIELDS_ID);
+				$customOptionID = $row->get(tables\IssueCustomFields::CUSTOMFIELDOPTION_ID);
+				if($custom_field_id == 1 || $custom_field_id == 6 || $custom_field_id == 7){
+					if($row->get(tables\IssueCustomFields::OPTION_VALUE) != null){
+						$refOrder = $row->get(tables\IssueCustomFields::OPTION_VALUE);
+						$customValues[$custom_field_id] = $refOrder;
+					}
+				}else if($custom_field_id != null){
+					if($customOptionID != null && $customOptionID != 0){
+						if($custom_field_id == 2){
+							$customFieldOption = tables\CustomFieldOptions::getTable()->getByID($customOptionID);
+							$ticketType = $customFieldOption->get(tables\CustomFieldOptions::NAME);
+							$customValues[$custom_field_id] = $ticketType;
+						}else if($custom_field_id == 4){
+							$component = tables\Components::getTable()->getByID($customOptionID);
+							if($component != null){
+								$refDepart = $component->get(tables\Components::NAME);
+								$customValues[$custom_field_id] = $refDepart;
+							}
+						}else if($custom_field_id == 5){
+							$edition = tables\Editions::getTable()->getByID($customOptionID);
+							if ($edition != null){
+								$refCustomer = $edition->get(tables\Editions::NAME);
+								$customValues[$custom_field_id] = $refCustomer;
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		if($issue->hasAssignee()){
+			$assignee = $issue->getAssignee();
+			if($assignee != null){
+				$assignee = $assignee->getUsername();
+			}else{
+				$assignee = "";
+			}
+		}else{
+			$assignee = "";
+		}
+		if($issue->getDescription() != null){
+			$issueDescription = $issue->getDescription();
+		}else{
+			$issueDescription = "";
+		}
+		$owner = $issue->getOwner();
+		if($owner!= null){
+			if($owner instanceof Team ){
+				$owner = $owner->getName();
+			}else if($owner instanceof  User){
+				$owner = $owner->getRealname();
+			}else{
+				$owner = $owner->getUsername();
+			}
+		}else{
+			$owner = "";
+		}
+		$posted_by = $issue->getPostedBy();
+		if($posted_by != null){
+			if($posted_by instanceof Team ){
+				$posted_by = $posted_by->getName();
+			}else if($posted_by instanceof  User){
+				$posted_by= $posted_by->getRealname();
+			}else{
+				$posted_by= $posted_by->getUsername();
+			}
+		}else{
+			$posted_by = "";
+		}
+		if($issue_type != null){
+			$issue_type = $issue_type->getName();
+		}else{
+			$issue_type = "";
+		}
+		if($issue_status != null){
+			$issue_status= $issue_status->getName();
+		}else{
+			$issue_status= "";
+		}
+		if(isset($customValues[2])){
+			$ticketType = $customValues[2];
+		}else{
+			$ticketType = "";
+		}
+		if(isset($customValues[1])){
+			$refOrder= $customValues[1];
+		}else{
+			$refOrder= "";
+		}
+		if(isset($customValues[4])){
+			$refDepart= $customValues[4];
+		}else{
+			$refDepart= "";
+		}
+		if(isset($customValues[5])){
+			$refCustomer= $customValues[5];
+		}else{
+			$refCustomer= "";
+		}
+		if(isset($customValues[6])){
+			$refModulo = $customValues[6];
+		}else{
+			$refModulo = "";
+		}
+		if(isset($customValues[7])){
+			$refServizio = $customValues[7];
+		}else{
+			$refServizio= "";
+		}
+		$issue_closed = $issue->isClosed();;
+		if($issue->isClosed()){
+			$issue_closed_at = $issue->getLastUpdatedTime();
+		}else{
+			$issue_closed_at = 0;
+		}
+		$last_updated = $issue->getLastUpdatedTime();
+		$estimatedTime = $issue->getEstimatedTime(true,true);
+		
+		$comments = [];
+		$comments = array_values($issue->getComments());
+		$comments_values = [];
+		foreach ($comments as $comment){
+			$content = "";
+			$posted_by = "";
+			$poted_at = 0;
+			if ($comment != null){
+				if($comment->getContent() != null){
+					$content = $comment->getContent();
+				}
+				if($comment->getPostedBy() != null){
+					if($this->getUserByID($comment->getPostedBy()->getID()) != null){
+						$posted_by = $this->getUserByID($comment->getPostedBy()->getID())->getRealName();
+					}
+				}
+				if($comment->getPosted() != null){
+					$posted_at = $comment->getPosted();
+				}
+			}
+			$comments_values[] = ["content" => $content,"posted_by" => $posted_by, "posted_at" => $posted_at];
+		}
+		return ["project_id" => $project->getID(),"project_name" => $project->getPrefix(),"issue_id" => $issue->getID(), "issue_name" => $issue->getName(),"issue_description" => $issueDescription,"issue_no" => $issue->getFormattedIssueNo(), "assigned_to" => $assignee,"issue_posted" => $issue->getPosted(),"posted_by" => $posted_by,"owned_by" => $owner,"status" => $issue->getStatus()->getID(),"status_description" => $issue_status,"issue_last_updated_at" => $last_updated,"is_issue_closed" => $issue_closed,"issue_closed_at" => $issue_closed_at,"issue_type" => $issue_type,"ref_order" => $refOrder,"ref_customer" => $refCustomer,"ref_depart" => $refDepart,"ref_csec_modulo" => $refModulo, "ref_csec_servizio" => $refServizio,"ticket_type" => $ticketType,"estimated_time" => $estimatedTime, "spent_time"=> $issue->getSpentTime(true,true), "comments" => $comments_values];
+	}
+	
+	
 	protected function modifyActivity($activity, $issue = null, $user = null, $months = null, $weeks = null, $days = null, $hours = null, $minutes = null, $points = null, $comment = null, $activity_type_id = null, $inserted = null){
 		if(isset($issue)) $activity->setIssue($issue);
 		if(isset($user)) $activity->setUser($user);
@@ -1279,6 +1590,14 @@ ORDER BY username, project_id";
 	
 	protected function getIssueByID($issue_id){
 		return entities\Issue::getB2DBTable()->selectById($issue_id);
+	}
+	
+	protected function getUserByID($user_id){
+		return entities\User::getB2DBTable()->selectById($user_id);
+	}
+	
+	protected function getProjectByID($project_id){
+		return entities\Project::getB2DBTable()->selectById($project_id);
 	}
 	
 	protected function getIssueHrefByID($issue_id){
