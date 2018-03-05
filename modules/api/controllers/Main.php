@@ -5,22 +5,14 @@ namespace thebuggenie\modules\api\controllers;
 use b2db\Criteria;
 use thebuggenie;
 use thebuggenie\core\entities;
-use thebuggenie\core\entities\Issue;
-use thebuggenie\core\entities\Project;
+use thebuggenie\core\entities\Team;
+use thebuggenie\core\entities\User;
 use thebuggenie\core\entities\tables;
+use thebuggenie\core\entities\tables\Issues;
 use thebuggenie\core\framework\Context;
 use thebuggenie\core\framework\Request;
 use thebuggenie\core\framework\Response;
 use thebuggenie\core\framework\Settings;
-use thebuggenie\core\entities\tables\CustomFieldOptions;
-use thebuggenie\core\entities\Team;
-use thebuggenie\core\entities\User;
-use thebuggenie\core\entities\CustomDatatype;
-use thebuggenie\core\entities\Status;
-use thebuggenie\core\entities\Workflow;
-use b2db\Table;
-use thebuggenie\core\entities\tables\Issues;
-use thebuggenie\core\entities\IssueSpentTime;
 
 class Main extends Action
 {
@@ -1283,6 +1275,7 @@ ORDER BY username, project_id";
 		$crit = $issues_table->getCriteria();
 		$crit->addWhere(tables\Issues::PROJECT_ID, $target_project);
 		$crit->addWhere(tables\Issues::STATE, 0);
+		$crit->addWhere(tables\Issues::DELETED, false);
 		$crit->addOrderBy(tables\Issues::ID, $crit::SORT_ASC_NUMERIC);
 		
 		foreach ($issues_table->select($crit) as $issue)
@@ -1295,6 +1288,7 @@ ORDER BY username, project_id";
 		$crit->addWhere(tables\Issues::PROJECT_ID, $target_project);
 		$crit->addWhere(tables\Issues::LAST_UPDATED, $target_time, $crit::DB_GREATER_THAN_EQUAL);
 		$crit->addWhere(tables\Issues::STATE, 1);
+		$crit->addWhere(tables\Issues::DELETED, false);
 		$crit->addOrderBy(tables\Issues::ID, $crit::SORT_ASC_NUMERIC);
 		
 		foreach ($issues_table->select($crit) as $issue)
